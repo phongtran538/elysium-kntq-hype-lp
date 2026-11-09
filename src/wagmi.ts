@@ -9,6 +9,7 @@ export const wagmiConfig = createConfig({
   transports: {
     [elysium.id]: fallback(RPC_URLS.map((u) => http(u, { timeout: 12_000, retryCount: 0 }))),
   },
+  batch: { multicall: false },
   multiInjectedProviderDiscovery: true,
 })
 

@@ -16,6 +16,7 @@ export function usePriceConsensus(pollMs = 15_000) {
       setResult({
         samples: [],
         agreed: false,
+        agreeing: 0,
         deviationPct: null,
         blockReason: e instanceof Error ? e.message : String(e),
         medianPrice: null,

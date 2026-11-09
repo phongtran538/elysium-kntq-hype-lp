@@ -1,10 +1,13 @@
-/** Public Elysium RPCs — BOXA first, then failover (chain 99901 / 0x1863d, verified 2026-11-09) */
+/** Public Elysium RPCs. Official Kinetiq endpoint first, then the others. */
+export const OFFICIAL_RPC = 'https://rpc.elysium.kinetiq.xyz'
+
 export const RPC_URLS = [
+  OFFICIAL_RPC,
   'https://rpc-live.boxa.club',
   'https://rpc.boxa.club',
   'https://rpc.eleos.fun',
-  'https://rpc.elysiumswap.finance',
   'https://rpc.stockium.fun',
+  'https://rpc.elysiumswap.finance',
 ] as const
 
 export type RpcUrl = (typeof RPC_URLS)[number]

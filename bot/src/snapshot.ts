@@ -45,7 +45,15 @@ export type PublicStatus = {
     medianPrice: number | null
     medianTick: number | null
     blockReason: string | null
-    samples: { url: string; ok: boolean; price: number | null; tick: number | null; error: string | null }[]
+    samples: {
+      url: string
+      ok: boolean
+      price: number | null
+      tick: number | null
+      error: string | null
+      outlier: boolean
+      deviationPct: number | null
+    }[]
   } | null
   positions: PublicPosition[]
   history: ReturnType<typeof getHistory>
@@ -73,6 +81,8 @@ function priceView(c: PriceConsensus | null) {
       price: s.price ?? null,
       tick: s.tick ?? null,
       error: shortErr(s.error),
+      outlier: s.outlier === true,
+      deviationPct: s.deviationPct ?? null,
     })),
   }
 }
@@ -113,12 +123,16 @@ export async function buildSnapshot(
     const account = accountFrom(cfg.privateKey)
     base.wallet = account.address
     const { publicClient } = makeClients(consensus.chosenRpc, account)
-    const [hype, kntq, positions] = await Promise.all([
-      hypeBalance(publicClient, account.address),
-      kntqBalance(publicClient, account.address),
-      loadPositions(publicClient, account.address, consensus.medianSqrtPriceX96),
-    ])
-    base.balances = { hype: formatUnits(hype, 18, 4), kntq: formatUnits(kntq, 18, 4) }
+    try {
+      const [hype, kntq] = await Promise.all([
+        hypeBalance(publicClient, account.address),
+        kntqBalance(publicClient, account.address),
+      ])
+      base.balances = { hype: formatUnits(hype, 18, 4), kntq: formatUnits(kntq, 18, 4) }
+    } catch (e) {
+      base.error = e instanceof Error ? e.message.slice(0, 180) : 'Không đọc được số dư'
+    }
+    const positions = await loadPositions(publicClient, account.address, consensus.medianSqrtPriceX96)
     base.positions = positions.map((p) => {
       const edge = rangeEdgeStatus(consensus.medianPrice!, p.lowerPrice, p.upperPrice, cfg.triggerPct)
       return {

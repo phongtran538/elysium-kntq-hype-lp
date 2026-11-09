@@ -234,7 +234,9 @@ export function BotPanel() {
             <li key={s.url}>
               {host(s.url)}:{' '}
               {s.ok && s.price != null
-                ? `1 HYPE ≈ ${priceText(s.price)} KNTQ (tick ${s.tick})`
+                ? `1 HYPE ≈ ${priceText(s.price)} KNTQ (tick ${s.tick})${
+                    s.outlier ? ` · loại (lệch ${(s.deviationPct ?? 0).toFixed(2)}% so với giá giữa)` : ''
+                  }`
                 : `không đọc được${s.error ? ` (${s.error})` : ''}`}
             </li>
           ))}
@@ -253,7 +255,18 @@ export function BotPanel() {
       <section className="panel">
         <h2>Vị thế</h2>
         {(status?.positions.length ?? 0) === 0 && (
-          <p className="muted">Chưa thấy vị thế trong pool này. Bot không tự mở vị thế lần đầu. Hãy tạo trên tab Pool.</p>
+          <p>
+            Chưa có vị thế nào trong pool này. Bot không tự mở vị thế lần đầu. Sang tab{' '}
+            <strong>Thủ công</strong>, kết nối <strong>đúng ví bot này</strong>
+            {status?.wallet ? (
+              <>
+                : <span className="mono">{status.wallet}</span>
+              </>
+            ) : (
+              ' (địa chỉ hiện sau khi file .env có khoá)'
+            )}
+            , rồi tạo vị thế khoảng <strong>±20%</strong> (nút “Chắc ±20%”).
+          </p>
         )}
         {status?.positions.map((p) => (
           <article key={p.tokenId} className="card">

@@ -6,6 +6,7 @@ import {
   openBotEvents,
   type BotStatus,
 } from '../lib/botClient'
+import { PnlCards, PnlChart } from './PnlCards'
 
 function host(url: string): string {
   return url.replace(/^https?:\/\//, '')
@@ -251,6 +252,39 @@ export function BotPanel() {
         )}
         {status?.error && <p className="err">{status.error}</p>}
       </section>
+
+      {status?.pnl?.totals && (
+        <section className="panel">
+          <div className="row between wrap gap">
+            <h2>Lãi lỗ</h2>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                const ok = confirm('Đặt lại mốc tính từ số token đang có? Phí và gas cũ sẽ không còn trong số này.')
+                if (!ok || !status.wallet || !status.price?.medianPrice) return
+                void act('/api/pnl/reset', {
+                  confirm: true,
+                  wallet: status.wallet,
+                  price: status.price.medianPrice,
+                  positions: status.positions.map((p) => ({
+                    tokenId: p.tokenId,
+                    amount0: p.amount0,
+                    amount1: p.amount1,
+                    fees0: p.fees0,
+                    fees1: p.fees1,
+                  })),
+                })
+              }}
+            >
+              Đặt lại mốc tính
+            </button>
+          </div>
+          <PnlCards pnl={status.pnl.totals} apr={status.pnl.totals.feeAprPct} estimated={status.pnl.positions.some((p) => p.estimated)} />
+          <PnlChart points={status.pnl.series} />
+          <p className="muted small">Đường xanh dương là phí tích lũy. Đường kia là lãi/lỗ ròng.</p>
+        </section>
+      )}
 
       <section className="panel">
         <h2>Vị thế</h2>

@@ -2,7 +2,9 @@ import { formatUnits, rangeEdgeStatus } from '../../src/lib/math'
 import { crossCheckPoolPrice, type PriceConsensus } from '../../src/lib/priceCheck'
 import { accountFrom, hypeBalance, kntqBalance, makeClients } from './chain'
 import type { BotConfig } from './env'
+import { fetchHypeUsd } from './hypeUsd'
 import { getHistory } from './history'
+import { observePositions, walletPnl, type SeenPosition, type WalletPnl } from './pnlStore'
 import { loadPositions } from './positions'
 
 export type PublicPosition = {
@@ -57,6 +59,7 @@ export type PublicStatus = {
   } | null
   positions: PublicPosition[]
   history: ReturnType<typeof getHistory>
+  pnl: WalletPnl | null
   error: string | null
 }
 
@@ -110,6 +113,7 @@ export async function buildSnapshot(
     price: null,
     positions: [],
     history: getHistory(),
+    pnl: null,
     error: null,
   }
   try {
@@ -132,7 +136,27 @@ export async function buildSnapshot(
     } catch (e) {
       base.error = e instanceof Error ? e.message.slice(0, 180) : 'Không đọc được số dư'
     }
+    const hypeUsd = await fetchHypeUsd()
     const positions = await loadPositions(publicClient, account.address, consensus.medianSqrtPriceX96)
+    const seen: SeenPosition[] = positions.map((p) => ({
+      tokenId: p.tokenId.toString(),
+      amount0: p.amount0,
+      amount1: p.amount1,
+      fees0: p.fees0,
+      fees1: p.fees1,
+    }))
+    observePositions({
+      wallet: account.address,
+      price: consensus.medianPrice,
+      hypeUsd,
+      positions: seen,
+    })
+    base.pnl = walletPnl({
+      wallet: account.address,
+      price: consensus.medianPrice,
+      hypeUsd,
+      positions: seen,
+    })
     base.positions = positions.map((p) => {
       const edge = rangeEdgeStatus(consensus.medianPrice!, p.lowerPrice, p.upperPrice, cfg.triggerPct)
       return {

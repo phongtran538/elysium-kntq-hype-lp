@@ -3,16 +3,20 @@ import type { PoolState } from '../hooks/usePoolState'
 import { formatPrice, isFullRange, priceAtTick } from '../config/ranges'
 import { formatUnits } from '../lib/math'
 import { RangeRiskNotice } from './RangeRiskNotice'
+import { PnlCards } from './PnlCards'
+import type { WalletPnl } from '../lib/botClient'
 
 export function PositionCard({
   pos,
   pool,
+  pnl,
   sendBlocked,
   onCollect,
   onWithdraw,
 }: {
   pos: LpPosition
   pool: PoolState | null
+  pnl?: WalletPnl['positions'][number] | null
   sendBlocked: boolean
   onCollect: (p: LpPosition) => void
   onWithdraw: (p: LpPosition) => void
@@ -71,6 +75,7 @@ export function PositionCard({
           <div className="sub">Ước tính vài giây · cần làm mới liên tục</div>
         </div>
       </div>
+      {pnl && <PnlCards pnl={pnl} estimated={pnl.estimated} apr={pnl.feeAprPct} />}
       {pool && (
         <RangeRiskNotice
           spotPrice={pool.priceKntqPerHype}

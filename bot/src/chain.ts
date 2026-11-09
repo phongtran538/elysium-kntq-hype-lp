@@ -146,6 +146,7 @@ export async function sendChecked(opts: {
   maxGas: bigint
   dryRun: boolean
   label: string
+  onReceipt?: (info: { hash: Hex; gasWei: bigint }) => void
 }): Promise<Hex | null> {
   const { publicClient, account, to, data, value } = opts
   let gas: bigint | null = null
@@ -189,7 +190,9 @@ export async function sendChecked(opts: {
   if (receipt.status !== 'success') {
     throw new Error(`${opts.label} bị revert. Xem ${explorerTx(hash)}`)
   }
-  log(`${opts.label}: thành công, block ${receipt.blockNumber}.`)
+  const gasWei = receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)
+  opts.onReceipt?.({ hash, gasWei })
+  log(`${opts.label}: thành công, block ${receipt.blockNumber}. Gas ${gasWei} wei.`)
   return hash
 }
 

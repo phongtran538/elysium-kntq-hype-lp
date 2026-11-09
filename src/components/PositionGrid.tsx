@@ -2,12 +2,14 @@ import { useMemo, useState } from 'react'
 import type { LpPosition } from '../hooks/usePositions'
 import type { PoolState } from '../hooks/usePoolState'
 import { PositionCard } from './PositionCard'
+import type { WalletPnl } from '../lib/botClient'
 
 type SortKey = 'principal' | 'fees' | 'apr' | 'id'
 
 export function PositionGrid({
   positions,
   pool,
+  pnl,
   loading,
   error,
   manualTokenId,
@@ -20,6 +22,7 @@ export function PositionGrid({
 }: {
   positions: LpPosition[]
   pool: PoolState | null
+  pnl?: WalletPnl | null
   loading: boolean
   error?: string | null
   manualTokenId: string
@@ -100,6 +103,7 @@ export function PositionGrid({
             key={p.tokenId.toString()}
             pos={p}
             pool={pool}
+            pnl={pnl?.positions.find((row) => row.tokenId === p.tokenId.toString()) ?? null}
             sendBlocked={!!sendBlockReason}
             onCollect={onCollect}
             onWithdraw={onWithdraw}

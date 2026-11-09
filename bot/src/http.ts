@@ -11,6 +11,10 @@ export type BotHttpDeps = {
   updateConfig: (body: unknown) => { ok: boolean; status: number; message: string }
   openEnv: () => { ok: boolean; message: string }
   reloadKey: () => { ok: boolean; message: string }
+  pnlSeen: (body: unknown) =>
+    | { ok: boolean; status: number; message: string; pnl?: unknown }
+    | Promise<{ ok: boolean; status: number; message: string; pnl?: unknown }>
+  pnlReset: (body: unknown) => { ok: boolean; status: number; message: string }
   recentLogs: () => string[]
   subscribeLogs: (fn: (line: string) => void) => () => void
 }
@@ -45,7 +49,7 @@ async function readJson(req: http.IncomingMessage): Promise<unknown> {
   for await (const chunk of req) {
     const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     size += buf.length
-    if (size > 16_384) throw new Error('Nội dung quá dài')
+    if (size > 65_536) throw new Error('Nội dung quá dài')
     chunks.push(buf)
   }
   if (chunks.length === 0) return {}
@@ -133,6 +137,18 @@ export function createBotServer(deps: BotHttpDeps): http.Server & { pushStatus: 
       if (method === 'POST' && url.pathname === '/api/reload-key') {
         const result = deps.reloadKey()
         sendJson(res, result.ok ? 200 : 400, result)
+        pushStatus()
+        return
+      }
+      if (method === 'POST' && url.pathname === '/api/pnl/seen') {
+        const result = await deps.pnlSeen(await readJson(req))
+        sendJson(res, result.status, result)
+        pushStatus()
+        return
+      }
+      if (method === 'POST' && url.pathname === '/api/pnl/reset') {
+        const result = deps.pnlReset(await readJson(req))
+        sendJson(res, result.status, result)
         pushStatus()
         return
       }

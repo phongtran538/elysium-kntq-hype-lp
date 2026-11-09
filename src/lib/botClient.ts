@@ -1,3 +1,5 @@
+import type { PnlResult } from './pnl'
+
 const BASE = 'http://127.0.0.1:8787'
 const STORAGE_KEY = 'kntq-bot-token'
 
@@ -51,7 +53,22 @@ export type BotStatus = {
     amount1: string
   }[]
   history: { at: number; kind: string; summary: string }[]
+  pnl: WalletPnl | null
   error: string | null
+}
+
+export type WalletPnl = {
+  wallet: string
+  hypeUsd: number | null
+  totals: PnlResult | null
+  positions: (PnlResult & {
+    tokenId: string
+    estimated: boolean
+    source: string
+    openedAt: number
+    closedAt: number | null
+  })[]
+  series: { at: number; netHype: number; feesHype: number }[]
 }
 
 export function captureBotToken(): string | null {

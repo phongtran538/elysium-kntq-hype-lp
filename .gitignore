@@ -23,6 +23,7 @@ bot/state.json.tmp
 bot/.auth-token
 bot/history.json
 bot/*.pid
+bot/data
 
 # Editor directories and files
 .vscode/*

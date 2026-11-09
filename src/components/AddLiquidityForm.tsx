@@ -23,6 +23,7 @@ import {
 } from '../lib/math'
 import { encodeIncreaseLiquidity, encodeMintPosition } from '../lib/actions'
 import type { useTxFlow } from '../hooks/useTxFlow'
+import { RangeRiskNotice } from './RangeRiskNotice'
 
 type Tx = ReturnType<typeof useTxFlow>
 
@@ -31,12 +32,14 @@ export function AddLiquidityForm({
   hypeBal,
   kntqBal,
   tx,
+  sendBlockReason,
   increaseTokenId,
 }: {
   pool: PoolState | null
   hypeBal: bigint
   kntqBal: bigint
   tx: Tx
+  sendBlockReason: string | null
   increaseTokenId?: bigint | null
 }) {
   const { address } = useAccount()
@@ -124,6 +127,10 @@ export function AddLiquidityForm({
 
   async function onSubmit() {
     if (!address || !pool || !previewCalc || !ticksValid) return
+    if (sendBlockReason) {
+      alert(sendBlockReason)
+      return
+    }
     if (pool.stale) {
       alert('行情已过期，请先刷新')
       return
@@ -214,7 +221,7 @@ export function AddLiquidityForm({
             ))}
           </div>
 
-          {rangeMeta && (
+          {pool && rangeMeta && (
             <div className={`range-summary${rangeMeta.inRange ? '' : ' out'}`}>
               <div className="range-row">
                 <span className="label">Tick</span>
@@ -242,6 +249,13 @@ export function AddLiquidityForm({
                 </span>
               </div>
               {activePreset && <p className="risk-hint">{activePreset.riskHint}</p>}
+              <RangeRiskNotice
+                spotPrice={pool.priceKntqPerHype}
+                tickLower={tl}
+                tickUpper={tu}
+                sqrtPriceX96={pool.sqrtPriceX96}
+                liquidity={previewCalc?.liq}
+              />
             </div>
           )}
 
@@ -295,9 +309,10 @@ export function AddLiquidityForm({
         </p>
       )}
 
+      {sendBlockReason && <p className="err">{sendBlockReason}</p>}
       <button
         className="btn primary wide"
-        disabled={!previewCalc || !address || !ticksValid}
+        disabled={!previewCalc || !address || !ticksValid || !!sendBlockReason}
         onClick={() => void onSubmit()}
       >
         预览并确认建仓

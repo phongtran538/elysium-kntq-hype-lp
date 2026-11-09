@@ -1,134 +1,182 @@
-# KNTQ/HYPE Uniswap V4 LP (Elysium)
+# Pool HYPE/KNTQ trên Elysium
 
-Local browser dapp for the KNTQ/native-HYPE Uniswap V4 pool on Elysium. It reads live chain data and lets you mint liquidity, collect fees, and withdraw a position.
+Đây là trang web chạy trên máy bạn, để thêm thanh khoản vào pool HYPE/KNTQ trên Uniswap V4 (phí 1%, tickSpacing 200, không có hook) ở mạng Elysium. Elysium là L2 của Kinetiq, chain id `99901`, phí gas trả bằng HYPE.
 
-Transactions are signed only in your own wallet. The app previews each call, simulates it with `eth_call`, then asks the wallet to sign once per step. It does not custody funds, hold keys, or widen slippage on its own.
+Tiền nằm trong ví của bạn. Trang này không giữ private key, không có server. Bạn tự bấm ký từng giao dịch trong ví.
 
-The interface is in Chinese. Range buttons, position cards, and transaction previews use those labels.
+Giao diện trang đang là tiếng Trung. Phần dưới giải thích từng chỗ bằng tiếng Việt, làm theo thứ tự là được.
 
-## Run
+## Cần cài gì
 
-From this repository root:
+Cài **Node.js bản 20.19 trở lên**. Bản 22.12 trở lên cũng được. Đừng dùng bản 21.
 
-```bash
-npm i && npm run dev
+Tải ở [https://nodejs.org](https://nodejs.org) (bản LTS). Cài xong, mở **Command Prompt** và gõ:
+
+```bat
+node -v
 ```
 
-Open `http://localhost:5173/`.
+Phải thấy `v20.19...` hoặc `v22.12...` trở lên.
 
-Production build:
+Cài **Git** ở [https://git-scm.com/download/win](https://git-scm.com/download/win). Next hết cũng được. Xong thì gõ:
 
-```bash
-npm run build && npm run preview
+```bat
+git --version
 ```
 
-Vite 8 needs Node `^20.19.0` or `>=22.12.0`. No `.env` file is required. RPC URLs and contract addresses are public constants in `src/config/`.
+## Chạy trang web
 
-## Elysium (chain 99901)
+Mở Command Prompt. Copy từng dòng, dán vào, Enter.
 
-Add or switch the wallet to Elysium. The connect bar calls `wallet_addEthereumChain` / `wallet_switchEthereumChain` when the wallet is on another chain, and passes the same RPC list the app uses (BOXA first). You can add the network manually with that same primary URL.
+```bat
+git clone https://github.com/phongtran538/elysium-kntq-hype-lp.git
+cd elysium-kntq-hype-lp
+npm ci
+npm run dev
+```
 
-| Field | Value |
+`npm ci` cài đúng phiên bản trong `package-lock.json`. Đừng dùng `npm install` trừ khi bạn cố ý sửa thư viện.
+
+Khi thấy dòng kiểu `Local: http://localhost:5173/`, mở trình duyệt vào:
+
+http://localhost:5173
+
+Muốn tắt trang thì quay lại cửa sổ đen, bấm **Ctrl+C**.
+
+## Thêm mạng Elysium vào ví
+
+Dùng MetaMask hoặc ví tương tự trên trình duyệt. Nếu ví chưa có mạng này, bấm nút vàng trên trang (chuyển sang Elysium) để ví tự thêm. Hoặc thêm tay:
+
+| Ô | Điền |
 | --- | --- |
-| Network name | Elysium |
-| Chain ID | `99901` (`0x1863d`) |
-| Native currency | HYPE, 18 decimals |
-| RPC | `https://rpc-live.boxa.club` |
+| Tên mạng | Elysium |
+| Chain ID | 99901 |
+| Ký hiệu tiền | HYPE |
+| Số thập phân | 18 |
+| RPC | https://rpc-live.boxa.club |
 | Explorer | https://elyscan.fun |
 
-The chain name sent to the wallet stays **Elysium**. MetaMask may show the network as “Elysium (via BOXA RPC)” when the endpoint is a BOXA RPC.
+Trang còn hỏi thêm mấy RPC dự phòng nếu cái đầu chết: `rpc.boxa.club`, `rpc.eleos.fun`, `rpc.elysiumswap.finance`, `rpc.stockium.fun`.
 
-The app fails over across these public RPCs, in order:
+Trong ví phải có một ít HYPE để trả gas, và KNTQ nếu bạn muốn bỏ KNTQ vào pool.
 
-1. https://rpc-live.boxa.club (BOXA, primary)
-2. https://rpc.boxa.club (BOXA)
-3. https://rpc.eleos.fun
-4. https://rpc.elysiumswap.finance
-5. https://rpc.stockium.fun
+## Dùng trang thế nào
 
-Treat public RPC responses as untrusted for display. Prefer your own RPC if you need stronger guarantees; this release does not yet expose a custom-RPC UI field.
+1. Bấm nút xanh góc trên để nối ví. Ký trong ví nếu nó hỏi.
+2. Nhìn dòng giá. Đó là giá đọc từ hợp đồng, 1 HYPE đổi được bao nhiêu KNTQ.
+3. Dải xanh hoặc đỏ phía trên là đối chiếu giá. Trang hỏi **ít nhất 2 RPC**. Nếu các RPC lệch nhau **quá 1%**, trang báo đỏ và **không cho gửi giao dịch**. Bấm làm mới rồi đợi chúng khớp lại.
+4. Chọn khoảng giá (các nút ±2%, ±5%, ±10%, ±20%, full, hoặc tự gõ tick). Tick phải chia hết cho 200.
+5. Gõ số HYPE và số KNTQ muốn bỏ vào. Nút nét đứt lấy theo số dư, nhưng chừa khoảng 0.08 HYPE trả gas.
+6. Đọc cảnh báo vàng/đỏ nếu giá đang **ngoài khoảng** hoặc **cách mép khoảng trong vòng 5%**. Lúc đó vị thế gần như không nhận phí.
+7. Bảng nhỏ phía dưới là **tổn thất tạm thời** (impermanent loss): nếu giá chạy ±10%, ±20%, ±50% thì vị thế có thể ít tiền hơn là cứ cầm hai đồng trong ví. Chưa tính phí swap bạn nhận được.
+8. Bấm nút xanh lớn để mở bảng xác nhận. Bảng này liệt kê đúng 3 địa chỉ, có link explorer, và số lượng:
+   - **PositionManager** `0x1d1c51b9d07fd27d36412a2b66cc23d19eb3e518` — hợp đồng bạn gọi để thêm/rút thanh khoản
+   - **Permit2** `0x000000000022d473030f116ddee9f6b43ac78ba3` — chỉ khi cần cho phép tiêu KNTQ
+   - **KNTQ** `0xe45a355d9e9cad2ad85f2d03e3ee3102a036acf0` — token
+9. Đối chiếu từng địa chỉ với ví. Đúng rồi mới ký. Mỗi bước một cửa sổ: approve KNTQ, rồi Permit2, rồi giao dịch chính. Trang không xin quyền unlimited. Permit2 hết hạn khoảng 1 giờ.
+10. Rút phí hoặc rút hết pool ở cột bên phải. Cũng qua bảng xác nhận, cũng bị chặn nếu các RPC lệch giá.
 
-## Contracts
+Ô HYPE/USD chỉ để bạn tự gõ cho dễ nhìn. Trang không tự bịa giá đô.
 
-Verified on Elysium on 2026-11-09.
+## Bot tự cân bằng lại
 
-| Name | Address |
-| --- | --- |
-| KNTQ | `0xe45a355d9e9cad2ad85f2d03e3ee3102a036acf0` |
-| WHYPE | `0xba876237b0f021a6c6d852d6c26e107997cc5e81` |
-| PoolId | `0xc96bfd21d36f8e7252f0d80fcb5f3bcacdf47c8b927b20711104713ebeb383ac` |
-| PoolManager | `0xe2e105d3f7209a9da11f83ccf3e7398a753823f1` |
-| PositionManager | `0x1d1c51b9d07fd27d36412a2b66cc23d19eb3e518` |
-| StateView | `0x27ed73ae0652fdcf71d6793412a7525f32be9dfe` |
-| Quoter | `0x379f556c5a748bd7cc9baf0f7a344094ac1814f5` |
-| Permit2 | `0x000000000022d473030f116ddee9f6b43ac78ba3` |
+Bot là chương trình chạy trong Command Prompt. Nó canh vị thế của **một ví riêng**. Khi giá sát mép khoảng (mặc định 5%) hoặc ra ngoài khoảng, nó sẽ:
 
-PoolKey:
+1. Rút hết thanh khoản, gom phí, đốt NFT vị thế.
+2. Swap **đúng pool V4 này** vừa đủ để hai đồng khớp khoảng mới (có trần trượt giá).
+3. Mở vị thế mới = giá hiện tại ±20% (làm tròn tick 200).
 
-| Field | Value |
-| --- | --- |
-| currency0 | native HYPE (`address(0)`) |
-| currency1 | KNTQ |
-| fee | `10000` (1%) |
-| tickSpacing | `200` |
-| hooks | `address(0)` |
+Mặc định `DRY_RUN=true`: nó **chỉ in ra** nó định làm gì, **không gửi** giao dịch.
 
-Full-range ticks: `-887200` to `887200`.
+### Làm ví riêng
 
-KNTQ is approved to canonical Permit2 for the **exact amount needed** for that mint/increase (+0.1% buffer), then Permit2 is approved to the PositionManager for the same capped amount with a **~1 hour** expiry. Native HYPE is sent as `msg.value` and excess is returned with `SWEEP`.
+Đừng dùng ví chính, đừng dùng ví đang giữ nhiều tiền.
 
-## What you can do
+1. Trong MetaMask: tạo tài khoản mới. Đặt tên kiểu `bot-lp`.
+2. Chuyển sang mạng Elysium.
+3. Chỉ gửi **một ít** HYPE và KNTQ vào. Mất thì chỉ mất phần đó.
+4. Bấm ba chấm của tài khoản đó → Account details → Show private key. Gõ mật khẩu ví. Copy khoá. Khoá này chỉ để trong file trên máy bạn.
 
-1. Connect an EIP-1193 wallet and switch to Elysium.
-2. Read HYPE and KNTQ balances and the on-chain slot0 price.
-3. Mint a new position or add to an existing token id.
-4. Browse your positions (principal, uncollected fees, a short-window APR). Sort by principal, fees, APR, or token id. Positions with `liquidity = 0` are hidden.
-5. Collect fees or withdraw (burn the position NFT). Each action opens a preview; **each approval and the main call is a separate in-app confirm** with its own `eth_call` + wallet signature.
-6. A stale-data banner appears when the pool quote is older than about 20 seconds. Refresh before sending.
-7. Collect and withdraw use the same user-set slippage / deadline controls shown in the meta panel (default `0.5%` / `20` min). Fee collect mins are expected fees minus that slippage (not `0`).
+Đừng gửi khoá cho ai. Không gửi vào chat, không gửi cho người tự xưng hỗ trợ, không dán lên ảnh. Ai hỏi khoá cũng là lừa.
 
-USD figures are display-only. Paste a HYPE/USD price yourself; the app does not invent a quote.
+### Tạo file .env
 
-## Range presets
+Trong thư mục project (cùng chỗ có `package.json`), Command Prompt:
 
-Mint ranges are centered on the current tick and aligned to `tickSpacing = 200`. Default is **均衡 ±10%**.
+```bat
+copy .env.example .env
+notepad .env
+```
 
-| Preset | Width | Notes |
-| --- | --- | --- |
-| 激进 ±2% | ±2% | Densest fees. A small move leaves the range. |
-| 积极 ±5% | ±5% | Faster fees, easier to fall out of range. |
-| 均衡 ±10% | ±10% | Default. Balance of fee density and range risk. |
-| 稳健 ±20% | ±20% | Wider, lower fee density than the narrow presets. |
-| 全区间 | full | Ticks `-887200` … `887200`. Almost never out of range; very little active liquidity. |
-| 自定义 | custom | You type both ticks. They must match spacing `200`. |
+Sửa các dòng:
 
-The form shows the price band, whether spot is inside it, and a rough liquidity multiple versus full range for the same token budgets.
+- `PRIVATE_KEY=` dán khoá vừa copy. Có `0x` phía trước cũng được, không có cũng được.
+- Để nguyên `DRY_RUN=true` lần đầu.
+- `RANGE_PCT=20` là khoảng mới ±20%.
+- `TRIGGER_PCT=5` là kích hoạt khi cách mép 5% hoặc đã ra ngoài.
+- `POLL_SECONDS=30` là hỏi giá mỗi 30 giây.
+- `MAX_SLIPPAGE_BPS=50` là trượt giá tối đa 0,5%.
+- `MIN_REBALANCE_INTERVAL_MINUTES=60` là sau mỗi lần chuyển vị thế thì nghỉ ít nhất 60 phút.
+- `MAX_GAS=1500000` là nếu gas ước lượng cao hơn thì hủy.
+- `GAS_RESERVE_HYPE=0.08` là luôn để lại 0.08 HYPE trả gas, bot không đụng vào.
+- `RPC_URLS` cần **ít nhất 2** địa chỉ, cách nhau bằng dấu phẩy.
 
-## SECURITY
+Save, tắt Notepad.
 
-- **No keys in the repo or app.** There is no backend, no remote signer, and no private key / seed phrase storage. Clone and run locally; only your browser wallet signs.
-- **「模拟」≠ 测网.** Preview simulation is `eth_call` against live Elysium `99901` (mainnet already live). It checks whether the call would revert and estimates gas; it does not mean a separate test network.
-- **Capped approvals.** ERC-20 approve to Permit2 and Permit2→PositionManager use the amount needed for that mint/increase (+0.1% buffer), not `maxUint256` / `2^160-1`. Permit2 expiry is about **1 hour**, not 30 days unlimited.
-- **Per-step confirms.** Approve KNTQ, Approve Permit2, and the main LP tx each require their own in-app confirm + wallet signature. The app does not chain all wallet popups after one click.
-- **No automatic slippage widen / no auto-resend.** Min/max amounts use the slippage percent you typed. A failed send is not retried and is not resubmitted with looser bounds.
-- **No secrets committed.** `.env` / `.env.*` are gitignored. Do not commit private keys, seed phrases, or personal wallet addresses.
-- **RPC trust.** Default RPCs are public. A malicious or wrong RPC can lie about prices or simulation results; always read the wallet’s own transaction summary before signing.
+File `.env` không được commit lên git. Đừng gửi file đó cho ai.
 
-## Known limits
+### Chạy thử, rồi mới chạy thật
 
-**`eth_getLogs` is capped at about 2000 blocks** on the public Elysium RPCs. Position discovery therefore:
+Xem giá và vị thế, không gửi gì:
 
-1. Scans `ownerOf` on a recent `nextTokenId` window (latest ~120 ids) so new mints still show up when logs are capped.
-2. Supplements that with `Transfer` logs in ~1800-block chunks over a ~30,000-block lookback.
+```bat
+npm run bot -- --status
+```
 
-If a chunked log query fails, the list falls back to that `ownerOf` window. Older positions outside both the window and the log lookback may be missing from the grid.
+Nó in giá từng RPC, khoảng tick của vị thế, đang trong hay ngoài khoảng, và phí chưa rút. Log cũng ghi vào `logs\bot.log`.
 
-**TokenId withdraw fallback.** If the list is empty or the scan fails, use **TokenId 快速撤池** on the positions panel. Enter the NFT id, and the app loads `ownerOf`, liquidity, and ticks, then opens the same withdraw preview (owner must be the connected wallet, liquidity must be non-zero).
+Chạy vòng lặp nhưng vẫn không gửi (vì DRY_RUN=true):
 
-Uncollected fees come from StateView `getPositionInfo` and `getFeeGrowthInside`. If a node cannot serve that read, the card shows `0` fees while principal still comes from real liquidity. This pool has `hooks = address(0)`; hooked positions are out of scope.
+```bat
+npm run bot
+```
 
-Custom RPC field in the UI is deferred (document trust above instead).
+Đọc chữ tiếng Việt trên màn hình. Nó sẽ nói rõ sẽ gọi hợp đồng nào, swap bao nhiêu, mint khoảng nào.
 
-## License
+Khi bạn thấy kế hoạch đúng và chấp nhận rủi ro bên dưới, tắt bot bằng **Ctrl+C**, mở lại `.env`, đổi thành:
 
-Source in this repository is provided as-is for local use against the public contracts above. Review every transaction in your wallet before signing.
+```bat
+DRY_RUN=false
+```
+
+Rồi chạy lại:
+
+```bat
+npm run bot
+```
+
+Lúc này nó gửi giao dịch thật. Muốn dừng: bấm **Ctrl+C** một lần, đợi nó xong việc đang làm. Bấm lần nữa thì thoát ngay (giao dịch đã lên mạng vẫn cứ chạy).
+
+Bot **không tự mở vị thế lần đầu**. Bạn tạo vị thế trên trang web trước, rồi mới để bot canh.
+
+## Rủi ro, đọc trước khi bật DRY_RUN=false
+
+- Mỗi lần cân bằng lại là vài giao dịch: gas HYPE cộng phí swap 1% của pool. Làm quá dày thì phí ăn hết lãi.
+- Khi rút vị thế, tổn thất tạm thời thành lỗ thật, không còn “tạm” nữa.
+- Private key nằm trong file `.env` trên máy. Máy dính virus là mất số tiền trong ví bot.
+- Pool mỏng thì dễ bị người khác đẩy giá trước mặt bot (front-run). Bot có trần trượt giá, lệch quá thì giao dịch hủy, nhưng không chặn hết.
+- RPC công cộng có thể trả giá sai. Bot hỏi nhiều RPC, lệch quá 1% thì không làm. Vẫn không bằng RPC của riêng bạn.
+- Bot chỉ swap trong pool HYPE/KNTQ này, qua Universal Router `0xa13f7611115752deb2b13813bdde16a5073e4b45`.
+
+## Lệnh cho người muốn kiểm tra code
+
+Cần Node >= 20.19.
+
+```bat
+npm ci
+npm test
+npm run build
+npm run bot -- --status
+```
+
+`npm test` chạy vitest cho công thức thanh khoản/tick/giá và cho logic kích hoạt bot.

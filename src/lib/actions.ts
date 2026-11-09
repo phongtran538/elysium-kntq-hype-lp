@@ -4,23 +4,44 @@
  */
 import {
   encodeAbiParameters,
+  encodeFunctionData,
   encodePacked,
   type Address,
   type Hex,
   concatHex,
 } from 'viem'
-import { POOL_KEY, NATIVE } from '../config/contracts'
+import { POOL_KEY, NATIVE, UNIVERSAL_ROUTER } from '../config/contracts'
 
 export const Actions = {
   INCREASE_LIQUIDITY: 0x00,
   DECREASE_LIQUIDITY: 0x01,
   MINT_POSITION: 0x02,
   BURN_POSITION: 0x03,
+  SWAP_EXACT_IN_SINGLE: 0x06,
+  SETTLE_ALL: 0x0c,
   SETTLE_PAIR: 0x0d,
+  TAKE_ALL: 0x0f,
   TAKE_PAIR: 0x11,
   CLOSE_CURRENCY: 0x12,
   SWEEP: 0x14,
 } as const
+
+/** Universal Router command byte. v2.1.2 uses the same V4_SWAP opcode as v2.1.1. */
+export const UR_V4_SWAP = 0x10
+
+export const universalRouterAbi = [
+  {
+    type: 'function',
+    name: 'execute',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'commands', type: 'bytes' },
+      { name: 'inputs', type: 'bytes[]' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+] as const
 
 export type PoolKeyStruct = {
   currency0: Address
@@ -229,6 +250,130 @@ export function encodeDecreaseLiquidity(args: {
       [dec, take],
     ),
     value: 0n,
+  }
+}
+
+/**
+ * Withdraw everything: decrease liquidity to 0 (principal + fees),
+ * TAKE_PAIR to the recipient, then BURN_POSITION.
+ * Burn sees zero liquidity and only destroys the NFT.
+ */
+export function encodeClosePosition(args: {
+  tokenId: bigint
+  liquidity: bigint
+  amount0Min: bigint
+  amount1Min: bigint
+  recipient: Address
+  hookData?: Hex
+}): { unlockData: Hex; value: bigint } {
+  const hookData = args.hookData ?? '0x'
+  const dec = encodeAbiParameters(
+    [
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint128' },
+      { type: 'uint128' },
+      { type: 'bytes' },
+    ],
+    [args.tokenId, args.liquidity, args.amount0Min, args.amount1Min, hookData],
+  )
+  const take = encodeAbiParameters(
+    [{ type: 'address' }, { type: 'address' }, { type: 'address' }],
+    [POOL_KEY.currency0, POOL_KEY.currency1, args.recipient],
+  )
+  const burn = encodeAbiParameters(
+    [
+      { type: 'uint256' },
+      { type: 'uint128' },
+      { type: 'uint128' },
+      { type: 'bytes' },
+    ],
+    [args.tokenId, 0n, 0n, hookData],
+  )
+  return {
+    unlockData: encodeUnlockData(
+      [Actions.DECREASE_LIQUIDITY, Actions.TAKE_PAIR, Actions.BURN_POSITION],
+      [dec, take, burn],
+    ),
+    value: 0n,
+  }
+}
+
+const swapSingleType = {
+  type: 'tuple',
+  components: [
+    {
+      name: 'poolKey',
+      type: 'tuple',
+      components: poolKeyType.components,
+    },
+    { name: 'zeroForOne', type: 'bool' },
+    { name: 'amountIn', type: 'uint128' },
+    { name: 'amountOutMinimum', type: 'uint128' },
+    { name: 'minHopPriceX36', type: 'uint256' },
+    { name: 'hookData', type: 'bytes' },
+  ],
+} as const
+
+/**
+ * Exact-input swap through THIS pool only, via Universal Router v2.1.2.
+ * minHopPriceX36 defaults to 0 (per-hop floor off). amountOutMinimum is the slippage bound.
+ * zeroForOne sells native HYPE, so value = amountIn. Selling KNTQ sends value 0 (Permit2 pays).
+ */
+export function encodeV4ExactInputSingle(args: {
+  zeroForOne: boolean
+  amountIn: bigint
+  amountOutMinimum: bigint
+  deadline: bigint
+  minHopPriceX36?: bigint
+}): { to: Address; data: Hex; value: bigint } {
+  const hookData: Hex = '0x'
+  const minHop = args.minHopPriceX36 ?? 0n
+  const inputCurrency = args.zeroForOne ? POOL_KEY.currency0 : POOL_KEY.currency1
+  const outputCurrency = args.zeroForOne ? POOL_KEY.currency1 : POOL_KEY.currency0
+  const swapParams = encodeAbiParameters([swapSingleType], [
+    {
+      poolKey: {
+        currency0: POOL_KEY.currency0,
+        currency1: POOL_KEY.currency1,
+        fee: POOL_KEY.fee,
+        tickSpacing: POOL_KEY.tickSpacing,
+        hooks: POOL_KEY.hooks,
+      },
+      zeroForOne: args.zeroForOne,
+      amountIn: args.amountIn,
+      amountOutMinimum: args.amountOutMinimum,
+      minHopPriceX36: minHop,
+      hookData,
+    },
+  ])
+  const settleParams = encodeAbiParameters(
+    [{ type: 'address' }, { type: 'uint256' }],
+    [inputCurrency, args.amountIn],
+  )
+  const takeParams = encodeAbiParameters(
+    [{ type: 'address' }, { type: 'uint256' }],
+    [outputCurrency, args.amountOutMinimum],
+  )
+  const actions = packActions([
+    Actions.SWAP_EXACT_IN_SINGLE,
+    Actions.SETTLE_ALL,
+    Actions.TAKE_ALL,
+  ])
+  const payload = encodeAbiParameters(
+    [{ type: 'bytes' }, { type: 'bytes[]' }],
+    [actions, [swapParams, settleParams, takeParams]],
+  )
+  const commands = encodePacked(['uint8'], [UR_V4_SWAP])
+  const data = encodeFunctionData({
+    abi: universalRouterAbi,
+    functionName: 'execute',
+    args: [commands, [payload], args.deadline],
+  })
+  return {
+    to: UNIVERSAL_ROUTER,
+    data,
+    value: args.zeroForOne ? args.amountIn : 0n,
   }
 }
 

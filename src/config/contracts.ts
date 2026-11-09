@@ -14,6 +14,18 @@ export const POSITION_MANAGER = '0x1d1c51b9d07fd27d36412a2b66cc23d19eb3e518' as 
 export const STATE_VIEW = '0x27ed73ae0652fdcf71d6793412a7525f32be9dfe' as const
 export const QUOTER = '0x379f556c5a748bd7cc9baf0f7a344094ac1814f5' as const
 export const PERMIT2 = '0x000000000022d473030f116ddee9f6b43ac78ba3' as const
+/** Universal Router v2.1.2 — the V4 swap entrypoint on this deployment */
+export const UNIVERSAL_ROUTER = '0xa13f7611115752deb2b13813bdde16a5073e4b45' as const
+
+export const EXPLORER_URL = 'https://elyscan.fun' as const
+
+export function explorerAddress(address: string): string {
+  return `${EXPLORER_URL}/address/${address}`
+}
+
+export function explorerTx(hash: string): string {
+  return `${EXPLORER_URL}/tx/${hash}`
+}
 
 /** On-chain PoolKey for KNTQ/HYPE (confirmed via POSM.poolKeys) */
 export const POOL_KEY = {

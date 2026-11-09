@@ -1,13 +1,19 @@
 import type { LpPosition } from '../hooks/usePositions'
+import type { PoolState } from '../hooks/usePoolState'
 import { formatPrice, isFullRange, priceAtTick } from '../config/ranges'
 import { formatUnits } from '../lib/math'
+import { RangeRiskNotice } from './RangeRiskNotice'
 
 export function PositionCard({
   pos,
+  pool,
+  sendBlocked,
   onCollect,
   onWithdraw,
 }: {
   pos: LpPosition
+  pool: PoolState | null
+  sendBlocked: boolean
   onCollect: (p: LpPosition) => void
   onWithdraw: (p: LpPosition) => void
 }) {
@@ -65,11 +71,20 @@ export function PositionCard({
           <div className="sub">秒级估算 · 需连续刷新</div>
         </div>
       </div>
+      {pool && (
+        <RangeRiskNotice
+          spotPrice={pool.priceKntqPerHype}
+          tickLower={pos.tickLower}
+          tickUpper={pos.tickUpper}
+          sqrtPriceX96={pool.sqrtPriceX96}
+          liquidity={pos.liquidity}
+        />
+      )}
       <div className="row gap">
-        <button className="btn" onClick={() => onCollect(pos)}>
+        <button className="btn" disabled={sendBlocked} onClick={() => onCollect(pos)}>
           提取手续费
         </button>
-        <button className="btn danger" onClick={() => onWithdraw(pos)}>
+        <button className="btn danger" disabled={sendBlocked} onClick={() => onWithdraw(pos)}>
           撤池
         </button>
       </div>

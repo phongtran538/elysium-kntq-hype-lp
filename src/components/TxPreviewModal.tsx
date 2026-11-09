@@ -1,3 +1,4 @@
+import { explorerAddress } from '../config/contracts'
 import type { TxPreview } from '../hooks/useTxFlow'
 import { formatUnits } from '../lib/math'
 
@@ -22,6 +23,9 @@ export function TxPreviewModal({
   const stepNum = preview.stepIndex + 1
   const isApproval = preview.stepIndex < approvals.length
   const currentApproval = isApproval ? approvals[preview.stepIndex] : null
+  const called = currentApproval
+    ? { name: currentApproval.label, address: currentApproval.to, value: currentApproval.value ?? 0n }
+    : { name: 'PositionManager.modifyLiquidities', address: preview.to, value: preview.value }
 
   const confirmLabel = simulating
     ? '模拟中…'
@@ -32,12 +36,44 @@ export function TxPreviewModal({
         : `模拟并签名 · 步骤 ${stepNum}/${totalSteps}（主交易）`
 
   return (
-    <div className="modal-backdrop" role="dialog">
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal">
         <h2>{preview.title}</h2>
         <p className="muted small">
-          分步确认：每一步单独模拟、单独签名；不会一次连弹多笔钱包弹窗。
+          签名前核对下面三个合约地址。钱包弹窗里的地址必须一模一样。每一步单独模拟、单独签名。
         </p>
+
+        <div className="addr-block">
+          <div className="label">这次实际发给</div>
+          <div className="addr-called">{called.name}</div>
+          <a
+            className="mono small"
+            href={explorerAddress(called.address)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {called.address}
+          </a>
+          <div className="small">
+            msg.value：{formatUnits(called.value, 18)} HYPE
+          </div>
+        </div>
+
+        <div className="label">合约地址（点开浏览器核对）</div>
+        <ul className="addr-list">
+          {preview.contracts.map((c) => (
+            <li key={c.name}>
+              <div>
+                <strong>{c.role}</strong> · {c.name}
+              </div>
+              <a href={explorerAddress(c.address)} target="_blank" rel="noreferrer" className="mono small">
+                {c.address}
+              </a>
+              <div className="small">{c.detail}</div>
+            </li>
+          ))}
+        </ul>
+
         <ul className="summary">
           {preview.summary.map((s) => (
             <li key={s}>{s}</li>
@@ -47,27 +83,13 @@ export function TxPreviewModal({
               共 {totalSteps} 步（{approvals.length} 笔授权 + 1 笔主交易），当前第 {stepNum} 步
             </li>
           )}
-          {currentApproval && (
-            <li>
-              <strong>当前步骤：{currentApproval.label}</strong>
-              {currentApproval.detail?.map((d) => (
-                <div key={d} className="mono small">
-                  {d}
-                </div>
-              ))}
+          {currentApproval?.detail?.map((d) => (
+            <li key={d} className="mono small">
+              {d}
             </li>
-          )}
-          {!isApproval && (
-            <li>
-              <strong>当前步骤：主交易</strong>
-              <div className="mono small">to: {preview.to}</div>
-              <div>
-                发送 value：{formatUnits(preview.value, 18)} HYPE（原生）
-              </div>
-            </li>
-          )}
+          ))}
           <li className="muted">
-            签名前会 eth_call 模拟（真实 Elysium 99901，不是测网）；失败不会自动重发或放宽滑点
+            点确认后会再向多个 RPC 读一次 slot0。价差超过 1% 就取消，不会发交易。失败也不会自动重发或放宽滑点。
           </li>
         </ul>
         {error && <p className="err">{error}</p>}

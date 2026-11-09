@@ -16,6 +16,7 @@ import {
 } from '../config/contracts'
 import { toChineseError } from '../lib/errors'
 import { formatUnits } from '../lib/math'
+import { crossCheckPoolPrice } from '../lib/priceCheck'
 
 /** Permit2 amount is uint160 */
 const PERMIT2_MAX_AMOUNT = 2n ** 160n - 1n
@@ -33,6 +34,13 @@ export type ApprovalStep = {
   detail?: string[]
 }
 
+export type ContractLine = {
+  role: string
+  name: string
+  address: Address
+  detail: string
+}
+
 export type TxPreview = {
   title: string
   summary: string[]
@@ -40,11 +48,40 @@ export type TxPreview = {
   data: Hex
   value: bigint
   approvals?: ApprovalStep[]
+  /** PositionManager, Permit2, and KNTQ — shown before every step. */
+  contracts: ContractLine[]
   /**
    * Which step the user is confirming right now.
    * 0..approvals.length-1 = that approval; approvals.length = main LP tx.
    */
   stepIndex: number
+}
+
+function contractLines(opts: {
+  hypeDetail: string
+  permitDetail: string
+  kntqDetail: string
+}): ContractLine[] {
+  return [
+    {
+      role: '主交易调用',
+      name: 'PositionManager',
+      address: POSITION_MANAGER,
+      detail: opts.hypeDetail,
+    },
+    {
+      role: '授权合约',
+      name: 'Permit2',
+      address: PERMIT2,
+      detail: opts.permitDetail,
+    },
+    {
+      role: '代币合约',
+      name: 'KNTQ',
+      address: KNTQ,
+      detail: opts.kntqDetail,
+    },
+  ]
 }
 
 function withApprovalBuffer(needed: bigint): bigint {
@@ -144,6 +181,9 @@ export function useTxFlow() {
       deadline: bigint
       /** Exact KNTQ the mint/increase may pull (usually amount1Max). Cap approvals to this. */
       kntqAmountNeeded?: bigint
+      hypeDetail?: string
+      permitDetail?: string
+      kntqDetail?: string
     }) => {
       const data = encodeFunctionData({
         abi: positionManagerAbi,
@@ -151,7 +191,23 @@ export function useTxFlow() {
         args: [opts.unlockData, opts.deadline],
       })
       const need = opts.kntqAmountNeeded ?? 0n
+      const buffered = need > 0n ? withApprovalBuffer(need) : 0n
       const approvals = need > 0n ? await ensureKntqPermit2(need) : []
+      const hypeDetail =
+        opts.hypeDetail ??
+        (opts.value > 0n
+          ? `最多发送 ${formatUnits(opts.value, 18)} HYPE（原生币，作为 msg.value）`
+          : '不发送原生 HYPE（msg.value = 0）')
+      const permitDetail =
+        opts.permitDetail ??
+        (need > 0n
+          ? `额度不够时会先把 KNTQ approve 给这个合约，再由它授权给 PositionManager。额度 ${formatUnits(buffered, 18)} KNTQ（本次需要 +0.1%），约 1 小时，不是无限授权。`
+          : '这次不需要 Permit2 授权。')
+      const kntqDetail =
+        opts.kntqDetail ??
+        (need > 0n
+          ? `最多动用 ${formatUnits(need, 18)} KNTQ`
+          : '这次不从钱包转出 KNTQ。')
       openPreview({
         title: opts.title,
         summary: opts.summary,
@@ -159,6 +215,7 @@ export function useTxFlow() {
         data,
         value: opts.value,
         approvals,
+        contracts: contractLines({ hypeDetail, permitDetail, kntqDetail }),
         stepIndex: 0,
       })
     },
@@ -172,6 +229,12 @@ export function useTxFlow() {
       return
     }
     setError(null)
+
+    const gate = await crossCheckPoolPrice()
+    if (!gate.agreed) {
+      setError(gate.blockReason ?? '多个 RPC 的现价对不上，已取消')
+      return
+    }
 
     const approvals = preview.approvals ?? []
     const isApproval = preview.stepIndex < approvals.length

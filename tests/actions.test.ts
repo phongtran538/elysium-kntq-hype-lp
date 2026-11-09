@@ -1,11 +1,26 @@
 import { decodeAbiParameters, decodeFunctionData } from 'viem'
 import { describe, expect, it } from 'vitest'
-import { UNIVERSAL_ROUTER } from '../src/config/contracts'
+import { NATIVE, UNIVERSAL_ROUTER } from '../src/config/contracts'
 import {
   encodeClosePosition,
+  encodeIncreaseLiquidity,
+  encodeMintPosition,
   encodeV4ExactInputSingle,
   universalRouterAbi,
 } from '../src/lib/actions'
+
+function sweepCurrency(unlockData: `0x${string}`): string {
+  const [, params] = decodeAbiParameters(
+    [{ type: 'bytes' }, { type: 'bytes[]' }],
+    unlockData,
+  )
+  const sweep = params[params.length - 1]!
+  const [currency] = decodeAbiParameters(
+    [{ type: 'address' }, { type: 'address' }],
+    sweep,
+  )
+  return currency.toLowerCase()
+}
 
 describe('action encoding', () => {
   it('packs decrease, take, and burn for a full close', () => {
@@ -54,5 +69,37 @@ describe('action encoding', () => {
       deadline: 10n,
     })
     expect(sellingKntq.value).toBe(0n)
+  })
+
+  it('sweeps leftover native HYPE, not KNTQ, on mint and increase', () => {
+    const recipient = '0x00000000000000000000000000000000000000ab'
+    const mint = encodeMintPosition({
+      tickLower: 52_000,
+      tickUpper: 54_200,
+      liquidity: 1000n,
+      amount0Max: 10n ** 17n,
+      amount1Max: 60n * 10n ** 18n,
+      recipient,
+    })
+    const increase = encodeIncreaseLiquidity({
+      tokenId: 4n,
+      liquidity: 1000n,
+      amount0Max: 10n ** 17n,
+      amount1Max: 60n * 10n ** 18n,
+      recipient,
+    })
+    const [mintActions] = decodeAbiParameters(
+      [{ type: 'bytes' }, { type: 'bytes[]' }],
+      mint.unlockData,
+    )
+    const [incActions] = decodeAbiParameters(
+      [{ type: 'bytes' }, { type: 'bytes[]' }],
+      increase.unlockData,
+    )
+    expect(mintActions).toBe('0x020d14')
+    expect(incActions).toBe('0x000d14')
+    expect(sweepCurrency(mint.unlockData)).toBe(NATIVE)
+    expect(sweepCurrency(increase.unlockData)).toBe(NATIVE)
+    expect(mint.value).toBe(10n ** 17n)
   })
 })

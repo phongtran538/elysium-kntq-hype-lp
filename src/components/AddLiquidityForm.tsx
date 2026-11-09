@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { DEFAULT_DEADLINE_MIN, DEFAULT_SLIPPAGE_PCT } from '../config/contracts'
+import { DEFAULT_DEADLINE_MIN, DEFAULT_MINT_SLIPPAGE_PCT } from '../config/contracts'
 import {
   DEFAULT_PRESET_ID,
   RANGE_PRESETS,
@@ -11,14 +11,13 @@ import {
   relativeWidthPct,
   resolvePresetTicks,
   type RangePresetId,
+  GAS_RESERVE_HYPE,
 } from '../config/ranges'
 import type { PoolState } from '../hooks/usePoolState'
 import {
-  applySlippageMax,
   formatUnits,
-  getAmountsForLiquidity,
-  getLiquidityForAmounts,
   getSqrtRatioAtTick,
+  liquidityUnderSlippageCap,
   parseUnits,
 } from '../lib/math'
 import { encodeIncreaseLiquidity, encodeMintPosition } from '../lib/actions'
@@ -48,7 +47,7 @@ export function AddLiquidityForm({
   const [tickUpper, setTickUpper] = useState('')
   const [amt0, setAmt0] = useState('')
   const [amt1, setAmt1] = useState('')
-  const [slippage, setSlippage] = useState(String(DEFAULT_SLIPPAGE_PCT))
+  const [slippage, setSlippage] = useState(String(DEFAULT_MINT_SLIPPAGE_PCT))
   const [deadlineMin, setDeadlineMin] = useState(String(DEFAULT_DEADLINE_MIN))
   const [budgetSeeded, setBudgetSeeded] = useState(false)
 
@@ -97,15 +96,26 @@ export function AddLiquidityForm({
 
   const previewCalc = useMemo(() => {
     if (!pool || !ticksValid || (!amt0 && !amt1)) return null
-    const a0 = parseUnits(amt0 || '0', 18)
-    const a1 = parseUnits(amt1 || '0', 18)
-    if (a0 === 0n && a1 === 0n) return null
-    const sqrtA = getSqrtRatioAtTick(tl)
-    const sqrtB = getSqrtRatioAtTick(tu)
-    const liq = getLiquidityForAmounts(pool.sqrtPriceX96, sqrtA, sqrtB, a0, a1)
-    const used = getAmountsForLiquidity(pool.sqrtPriceX96, sqrtA, sqrtB, liq)
-    return { liq, used, a0, a1 }
-  }, [pool, amt0, amt1, tl, tu, ticksValid])
+    const input0 = parseUnits(amt0 || '0', 18)
+    const input1 = parseUnits(amt1 || '0', 18)
+    if (input0 === 0n && input1 === 0n) return null
+    const reserve = parseUnits(String(GAS_RESERVE_HYPE), 18)
+    const hypeCap = hypeBal > reserve ? hypeBal - reserve : 0n
+    const available0 = input0 < hypeCap ? input0 : hypeCap
+    const available1 = input1 < kntqBal ? input1 : kntqBal
+    if (available0 === 0n && available1 === 0n) return null
+    const slipPct = Number.isFinite(slip) && slip >= 0 ? slip : 0
+    const sized = liquidityUnderSlippageCap({
+      sqrtPriceX96: pool.sqrtPriceX96,
+      sqrtLowerX96: getSqrtRatioAtTick(tl),
+      sqrtUpperX96: getSqrtRatioAtTick(tu),
+      available0,
+      available1,
+      slippagePct: slipPct,
+    })
+    if (sized.liquidity === 0n) return null
+    return { ...sized, available0, available1, slipPct }
+  }, [pool, amt0, amt1, tl, tu, ticksValid, hypeBal, kntqBal, slip])
 
   function fillFromBalance() {
     const b = budgetsFromBalances(hypeBal, kntqBal)
@@ -139,14 +149,22 @@ export function AddLiquidityForm({
       alert('Điền trượt giá hợp lệ (app không tự nới)')
       return
     }
-    const amount0Max = applySlippageMax(previewCalc.used.amount0, slip)
-    const amount1Max = applySlippageMax(previewCalc.used.amount1, slip)
+    const { liquidity, used0, used1, amount0Max, amount1Max, available0, available1, slipPct } = previewCalc
     const deadline = BigInt(Math.floor(Date.now() / 1000) + Number(deadlineMin) * 60)
+    const resize = {
+      kind: increaseTokenId != null ? ('increase' as const) : ('mint' as const),
+      tokenId: increaseTokenId ?? undefined,
+      tickLower: tl,
+      tickUpper: tu,
+      budget0: available0,
+      budget1: available1,
+      slippagePct: slipPct,
+    }
 
     if (increaseTokenId != null) {
       const { unlockData, value } = encodeIncreaseLiquidity({
         tokenId: increaseTokenId,
-        liquidity: previewCalc.liq,
+        liquidity,
         amount0Max,
         amount1Max,
         recipient: address,
@@ -154,17 +172,19 @@ export function AddLiquidityForm({
       await tx.buildModifyTx({
         title: `Thêm thanh khoản #${increaseTokenId}`,
         summary: [
-          `Thanh khoản thêm ${previewCalc.liq.toString()}`,
-          `Trả tối đa ${formatUnits(amount0Max, 18)} HYPE + ${formatUnits(amount1Max, 18)} KNTQ`,
-          `Trượt giá ${slip}% (bạn đặt, app không tự nới)`,
-          amount1Max > 0n
-            ? `Quyền KNTQ bị trần theo mức tối đa lần này ${formatUnits(amount1Max, 18)} (+0,1%), Permit2 khoảng 1 giờ`
+          `Thanh khoản thêm ${liquidity.toString()}`,
+          `Dùng khoảng ${formatUnits(used0, 18)} HYPE + ${formatUnits(used1, 18)} KNTQ`,
+          `Trần ${formatUnits(amount0Max, 18)} HYPE + ${formatUnits(amount1Max, 18)} KNTQ (trượt giá ${slipPct}%, không vượt số dư)`,
+          'Ngay trước khi ký, giá được đọc lại và thanh khoản tính lại cho vừa trần.',
+          available1 > 0n
+            ? `Quyền KNTQ theo số dư dùng được ${formatUnits(available1, 18)} (+0,1%), Permit2 khoảng 1 giờ`
             : 'Lần này không cần cấp quyền KNTQ',
         ],
         unlockData,
         value,
         deadline,
-        kntqAmountNeeded: amount1Max,
+        kntqAmountNeeded: available1,
+        resize,
       })
       return
     }
@@ -172,7 +192,7 @@ export function AddLiquidityForm({
     const { unlockData, value } = encodeMintPosition({
       tickLower: tl,
       tickUpper: tu,
-      liquidity: previewCalc.liq,
+      liquidity,
       amount0Max,
       amount1Max,
       recipient: address,
@@ -185,18 +205,20 @@ export function AddLiquidityForm({
         rangeMeta
           ? `Giá 1 HYPE ≈ ${formatPrice(rangeMeta.priceLo)}–${formatPrice(rangeMeta.priceHi)} KNTQ`
           : '',
-        `Thanh khoản ${previewCalc.liq.toString()}`,
-        `Dự kiến dùng ${formatUnits(previewCalc.used.amount0, 18)} HYPE + ${formatUnits(previewCalc.used.amount1, 18)} KNTQ`,
-        `Trần (gồm trượt giá ${slip}%) ${formatUnits(amount0Max, 18)} HYPE + ${formatUnits(amount1Max, 18)} KNTQ`,
+        `Thanh khoản ${liquidity.toString()}`,
+        `Dùng khoảng ${formatUnits(used0, 18)} HYPE + ${formatUnits(used1, 18)} KNTQ`,
+        `Trần ${formatUnits(amount0Max, 18)} HYPE + ${formatUnits(amount1Max, 18)} KNTQ (trượt giá ${slipPct}%, không vượt số dư)`,
+        'Ngay trước khi ký, giá được đọc lại và thanh khoản tính lại cho vừa trần.',
         `Hạn chót ${deadlineMin} phút`,
-        amount1Max > 0n
-          ? `Quyền KNTQ bị trần theo mức lần này (+0,1%), Permit2 khoảng 1 giờ`
+        available1 > 0n
+          ? `Quyền KNTQ theo số dư dùng được ${formatUnits(available1, 18)} (+0,1%), Permit2 khoảng 1 giờ`
           : 'Lần này không cần cấp quyền KNTQ',
       ].filter(Boolean),
       unlockData,
       value,
       deadline,
-      kntqAmountNeeded: amount1Max,
+      kntqAmountNeeded: available1,
+      resize,
     })
   }
 
@@ -254,7 +276,7 @@ export function AddLiquidityForm({
                 tickLower={tl}
                 tickUpper={tu}
                 sqrtPriceX96={pool.sqrtPriceX96}
-                liquidity={previewCalc?.liq}
+                liquidity={previewCalc?.liquidity}
               />
             </div>
           )}
@@ -303,9 +325,9 @@ export function AddLiquidityForm({
 
       {previewCalc && (
         <p className="muted">
-          Thanh khoản ước tính {previewCalc.liq.toString()} · dùng khoảng{' '}
-          {formatUnits(previewCalc.used.amount0, 18)} HYPE +{' '}
-          {formatUnits(previewCalc.used.amount1, 18)} KNTQ
+          Thanh khoản ước tính {previewCalc.liquidity.toString()} · dùng khoảng{' '}
+          {formatUnits(previewCalc.used0, 18)} HYPE + {formatUnits(previewCalc.used1, 18)} KNTQ.
+          Trần {formatUnits(previewCalc.amount0Max, 18)} HYPE + {formatUnits(previewCalc.amount1Max, 18)} KNTQ.
         </p>
       )}
 

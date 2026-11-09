@@ -15,12 +15,11 @@ import {
   encodeV4ExactInputSingle,
 } from '../../src/lib/actions'
 import {
-  applySlippageMax,
   applySlippageMin,
   formatUnits,
   getAmountsForLiquidity,
-  getLiquidityForAmounts,
   getSqrtRatioAtTick,
+  liquidityUnderSlippageCap,
   rangeEdgeStatus,
 } from '../../src/lib/math'
 import { crossCheckPoolPrice, type PriceConsensus } from '../../src/lib/priceCheck'
@@ -529,20 +528,26 @@ async function swapAndMint(
     log('Không cần swap. Tỉ lệ hai đồng đã khớp khoảng mới.')
   }
 
+  const fresh = await freshConsensus(cfg)
+  printConsensus(fresh)
+  if (!fresh.agreed || !fresh.medianSqrtPriceX96 || fresh.medianPrice == null) {
+    throw new Error('Giá các RPC không khớp ngay trước khi mint. Dừng, không gửi.')
+  }
   const slipPct = cfg.maxSlippageBps / 100
-  const budget0 = (bal0 * BigInt(10_000 - cfg.maxSlippageBps)) / 10_000n
-  const budget1 = (kntq * BigInt(10_000 - cfg.maxSlippageBps)) / 10_000n
   const sqrtA = getSqrtRatioAtTick(next.tickLower)
   const sqrtB = getSqrtRatioAtTick(next.tickUpper)
-  const liq = getLiquidityForAmounts(sqrt, sqrtA, sqrtB, budget0, budget1)
-  if (liq === 0n) {
+  const sized = liquidityUnderSlippageCap({
+    sqrtPriceX96: fresh.medianSqrtPriceX96,
+    sqrtLowerX96: sqrtA,
+    sqrtUpperX96: sqrtB,
+    available0: bal0,
+    available1: kntq,
+    slippagePct: slipPct,
+  })
+  if (sized.liquidity === 0n) {
     throw new Error('Không đủ HYPE/KNTQ để mint sau khi chừa gas. Dừng.')
   }
-  const used = getAmountsForLiquidity(sqrt, sqrtA, sqrtB, liq)
-  let amount0Max = applySlippageMax(used.amount0, slipPct)
-  let amount1Max = applySlippageMax(used.amount1, slipPct)
-  if (amount0Max > bal0) amount0Max = bal0
-  if (amount1Max > kntq) amount1Max = kntq
+  const { liquidity: liq, used0, used1, amount0Max, amount1Max } = sized
   if (amount1Max > 0n) {
     await ensureKntqAllowance({
       publicClient: clients.publicClient,
@@ -572,7 +577,7 @@ async function swapAndMint(
     `Mint tick [${next.tickLower}, ${next.tickUpper}], liquidity ${liq}, tối đa ${formatUnits(amount0Max, 18, 4)} HYPE + ${formatUnits(amount1Max, 18, 4)} KNTQ.`,
   )
   if (!cfg.dryRun) {
-    notePendingMint(account.address, used.amount0, used.amount1, again.medianPrice ?? 0)
+    notePendingMint(account.address, used0, used1, fresh.medianPrice ?? 0)
   }
   await guardBalance(clients.publicClient, account.address, minted.value, reserve, 'Mint')
   await sendChecked({

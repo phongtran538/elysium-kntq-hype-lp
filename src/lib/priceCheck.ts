@@ -2,11 +2,13 @@ import { createPublicClient, http } from 'viem'
 import { stateViewAbi } from '../abis/stateView'
 import { elysium } from '../config/chain'
 import { POOL_ID, STATE_VIEW } from '../config/contracts'
-import { RPC_URLS } from '../config/rpc'
-import { priceFromSqrtX96, priceSpreadPct } from './math'
+import { OFFICIAL_RPC, RPC_URLS } from '../config/rpc'
+import { priceFromSqrtX96 } from './math'
 
-/** Block sends when RPC prices differ by more than this percent. */
+/** A quote farther than this from the median is an outlier and is ignored. */
 export const MAX_PRICE_DEVIATION_PCT = 1
+/** Sends stay blocked until at least this many RPCs sit within 1% of the median. */
+export const MIN_AGREEING_RPCS = 3
 
 export type RpcPriceSample = {
   url: string
@@ -15,14 +17,19 @@ export type RpcPriceSample = {
   tick?: number
   sqrtPriceX96?: bigint
   error?: string
+  /** True when this RPC answered but its price is more than 1% off the median. */
+  outlier?: boolean
+  deviationPct?: number
 }
 
 export type PriceConsensus = {
   samples: RpcPriceSample[]
   agreed: boolean
   deviationPct: number | null
-  /** Chinese message for the UI. Null when it is safe to send. */
+  /** Vietnamese message for the UI. Null when it is safe to send. */
   blockReason: string | null
+  /** How many RPCs are within 1% of the median. */
+  agreeing: number
   medianPrice: number | null
   medianTick: number | null
   medianSqrtPriceX96: bigint | null
@@ -37,6 +44,7 @@ async function readSlot0(url: string): Promise<{
   const client = createPublicClient({
     chain: elysium,
     transport: http(url, { timeout: 8_000, retryCount: 0 }),
+    batch: { multicall: false },
   })
   const slot0 = await client.readContract({
     address: STATE_VIEW,
@@ -53,7 +61,78 @@ async function readSlot0(url: string): Promise<{
   return { price, tick, sqrtPriceX96 }
 }
 
-/** Read slot0 from each RPC on its own. Needs at least two that agree within 1%. */
+function medianOf(values: number[]): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  if (sorted.length % 2 === 1) return sorted[mid]!
+  return (sorted[mid - 1]! + sorted[mid]!) / 2
+}
+
+function pctFromMedian(price: number, median: number): number {
+  if (!(median > 0)) return Number.POSITIVE_INFINITY
+  return (Math.abs(price - median) / median) * 100
+}
+
+/**
+ * Median of the RPCs that answered. Quotes more than 1% from that median are
+ * outliers and do not count. Sends are allowed only when at least 3 remain.
+ */
+export function summarizeRpcPrices(
+  samples: RpcPriceSample[],
+  opts?: { maxDeviationPct?: number; minAgree?: number; preferredUrl?: string },
+): PriceConsensus {
+  const maxDeviationPct = opts?.maxDeviationPct ?? MAX_PRICE_DEVIATION_PCT
+  const minAgree = opts?.minAgree ?? MIN_AGREEING_RPCS
+  const preferredUrl = (opts?.preferredUrl ?? OFFICIAL_RPC).toLowerCase()
+  const ok = samples.filter((s) => s.ok && s.price != null && s.price > 0)
+  const median = medianOf(ok.map((s) => s.price!))
+
+  const marked: RpcPriceSample[] = samples.map((s) => {
+    if (!s.ok || s.price == null || !(s.price > 0) || median == null) return { ...s, outlier: false }
+    const deviationPct = pctFromMedian(s.price, median)
+    return {
+      ...s,
+      deviationPct,
+      outlier: deviationPct > maxDeviationPct,
+    }
+  })
+  const inliers = marked.filter((s) => s.ok && s.price != null && !s.outlier)
+  const deviationPct =
+    median == null || inliers.length === 0
+      ? null
+      : Math.max(...inliers.map((s) => s.deviationPct ?? 0))
+  const agreed = inliers.length >= minAgree
+
+  const pick = (group: RpcPriceSample[]): RpcPriceSample | undefined => {
+    const preferred = group.find((s) => s.url.toLowerCase() === preferredUrl)
+    if (preferred) return preferred
+    if (median == null) return group[0]
+    return [...group].sort(
+      (a, b) => pctFromMedian(a.price ?? 0, median) - pctFromMedian(b.price ?? 0, median),
+    )[0]
+  }
+  const pool = inliers.length > 0 ? inliers : marked.filter((s) => s.ok && s.price != null && s.price > 0)
+  const chosen = pick(pool)
+
+  const blockReason = agreed
+    ? null
+    : `Chỉ có ${inliers.length} RPC khớp quanh giá giữa (cần ít nhất ${minAgree}, lệch không quá ${maxDeviationPct}%). Đã khóa gửi giao dịch.`
+
+  return {
+    samples: marked,
+    agreed,
+    agreeing: inliers.length,
+    deviationPct,
+    blockReason,
+    medianPrice: median,
+    medianTick: chosen?.tick ?? null,
+    medianSqrtPriceX96: chosen?.sqrtPriceX96 ?? null,
+    chosenRpc: chosen?.url ?? null,
+  }
+}
+
+/** Read slot0 from each RPC on its own, then keep the ones near the median. */
 export async function crossCheckPoolPrice(
   urls: readonly string[] = RPC_URLS,
 ): Promise<PriceConsensus> {
@@ -68,30 +147,5 @@ export async function crossCheckPoolPrice(
       }
     }),
   )
-  const ok = samples.filter((s) => s.ok && s.price != null && s.price > 0)
-  const deviationPct = priceSpreadPct(ok.map((s) => s.price ?? 0))
-  const sorted = [...ok].sort((a, b) => (a.price ?? 0) - (b.price ?? 0))
-  const mid = sorted[Math.floor((sorted.length - 1) / 2)]
-
-  let agreed = false
-  let blockReason: string | null
-  if (ok.length < 2) {
-    blockReason = `Chỉ đọc được ${ok.length} RPC. Cần ít nhất 2 RPC để đối chiếu giá, nên đã khóa gửi giao dịch.`
-  } else if (deviationPct == null || deviationPct > MAX_PRICE_DEVIATION_PCT) {
-    blockReason = `Các RPC lệch giá ${(deviationPct ?? 0).toFixed(2)}%, quá ${MAX_PRICE_DEVIATION_PCT}%. Đã khóa gửi giao dịch.`
-  } else {
-    agreed = true
-    blockReason = null
-  }
-
-  return {
-    samples,
-    agreed,
-    deviationPct,
-    blockReason,
-    medianPrice: mid?.price ?? null,
-    medianTick: mid?.tick ?? null,
-    medianSqrtPriceX96: mid?.sqrtPriceX96 ?? null,
-    chosenRpc: mid?.url ?? null,
-  }
+  return summarizeRpcPrices(samples)
 }

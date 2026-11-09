@@ -48,7 +48,9 @@ function buildTransport(): Transport {
 export const publicClient: PublicClient = createPublicClient({
   chain: elysium,
   transport: buildTransport(),
-  batch: { multicall: true },
+  // Elysium's chain config has no multicall3 entry. Batching reads throws
+  // "does not support contract multicall3", so each read is its own eth_call.
+  batch: { multicall: false },
 })
 
 /** Read with manual failover on failure */

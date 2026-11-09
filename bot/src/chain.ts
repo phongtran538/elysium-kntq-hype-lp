@@ -72,7 +72,11 @@ export function makeClients(url: string, account: PrivateKeyAccount): {
 } {
   const transport = http(url, { timeout: 20_000, retryCount: 0 })
   return {
-    publicClient: createPublicClient({ chain: elysium, transport }),
+    publicClient: createPublicClient({
+      chain: elysium,
+      transport,
+      batch: { multicall: false },
+    }),
     walletClient: createWalletClient({ account, chain: elysium, transport }),
   }
 }

@@ -56,20 +56,23 @@ async function ownerOfChunk(
   ids: bigint[],
   owner: Address,
 ): Promise<bigint[]> {
-  const out = await client.multicall({
-    allowFailure: true,
-    contracts: ids.map((tokenId) => ({
-      address: POSITION_MANAGER,
-      abi: positionManagerAbi,
-      functionName: 'ownerOf' as const,
-      args: [tokenId] as const,
-    })),
-  })
+  const rows = await Promise.all(
+    ids.map(async (tokenId) => {
+      try {
+        return await client.readContract({
+          address: POSITION_MANAGER,
+          abi: positionManagerAbi,
+          functionName: 'ownerOf',
+          args: [tokenId],
+        })
+      } catch {
+        return null
+      }
+    }),
+  )
   const owned: bigint[] = []
-  out.forEach((row, i) => {
-    if (row.status === 'success' && row.result.toLowerCase() === owner.toLowerCase()) {
-      owned.push(ids[i]!)
-    }
+  rows.forEach((row, i) => {
+    if (row && row.toLowerCase() === owner.toLowerCase()) owned.push(ids[i]!)
   })
   return owned
 }
@@ -91,8 +94,8 @@ export async function loadPositions(
   for (let i = start; i < n; i++) ids.push(BigInt(i))
 
   const owned = new Set<string>()
-  for (let i = 0; i < ids.length; i += 80) {
-    const chunk = ids.slice(i, i + 80)
+  for (let i = 0; i < ids.length; i += 20) {
+    const chunk = ids.slice(i, i + 20)
     const hits = await ownerOfChunk(client, chunk, owner)
     for (const id of hits) owned.add(id.toString())
   }

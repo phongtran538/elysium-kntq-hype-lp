@@ -22,11 +22,15 @@ export function PriceCheckBanner({ result }: { result: PriceConsensus | null }) 
   }
 
   const lines = result.samples.map((s) => {
+    if (s.ok && s.price != null && s.outlier) {
+      return `${host(s.url)}: 1 HYPE ≈ ${s.price.toPrecision(6)} KNTQ · loại (lệch ${(s.deviationPct ?? 0).toFixed(2)}% so với giá giữa)`
+    }
     if (s.ok && s.price != null) {
       return `${host(s.url)}: 1 HYPE ≈ ${s.price.toPrecision(6)} KNTQ`
     }
     return `${host(s.url)}: đọc lỗi (${shortErr(s.error)})`
   })
+  const excluded = result.samples.filter((s) => s.outlier).length
 
   if (!result.agreed) {
     return (
@@ -43,12 +47,22 @@ export function PriceCheckBanner({ result }: { result: PriceConsensus | null }) 
     )
   }
 
-  const n = result.samples.filter((s) => s.ok).length
   return (
     <div className="banner banner-ok">
-      <span>
-        Đối chiếu RPC ổn: {n} nút, lệch {(result.deviationPct ?? 0).toFixed(3)}% (ngưỡng 1%)
-      </span>
+      <div>
+        <span>
+          Đối chiếu ổn: {result.agreeing} RPC khớp quanh giá giữa
+          {excluded > 0 ? `, ${excluded} RPC bị loại vì lệch quá 1%` : ''}. Lệch trong nhóm khớp{' '}
+          {(result.deviationPct ?? 0).toFixed(3)}%.
+        </span>
+        {excluded > 0 && (
+          <ul className="rpc-list">
+            {lines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   )
 }

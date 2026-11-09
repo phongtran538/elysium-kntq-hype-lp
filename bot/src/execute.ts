@@ -76,22 +76,23 @@ function deadline(): bigint {
 function printConsensus(c: PriceConsensus): void {
   log('Đối chiếu giá slot0 (StateView) trên từng RPC:')
   for (const s of c.samples) {
-    if (s.ok && s.price != null) {
+    if (s.ok && s.price != null && s.outlier) {
+      log(
+        `  ${host(s.url)}: 1 HYPE ≈ ${fmtPrice(s.price)} KNTQ, tick ${s.tick} — loại, lệch ${(s.deviationPct ?? 0).toFixed(2)}% so với giá giữa`,
+      )
+    } else if (s.ok && s.price != null) {
       log(`  ${host(s.url)}: 1 HYPE ≈ ${fmtPrice(s.price)} KNTQ, tick ${s.tick}`)
     } else {
       log(`  ${host(s.url)}: không đọc được (${shortRpcError(s.error)})`)
     }
   }
   if (c.agreed) {
+    const dropped = c.samples.filter((s) => s.outlier).length
     log(
-      `Giá khớp. Lệch tối đa ${(c.deviationPct ?? 0).toFixed(3)}% (ngưỡng 1%). Dùng RPC ${c.chosenRpc ? host(c.chosenRpc) : '?'}.`,
+      `Giá khớp: ${c.agreeing} RPC trong 1% quanh giá giữa${dropped ? `, ${dropped} RPC bị loại` : ''}. Dùng RPC ${c.chosenRpc ? host(c.chosenRpc) : '?'}.`,
     )
-  } else if (c.samples.filter((s) => s.ok).length < 2) {
-    log('Không đủ RPC để đối chiếu (cần ít nhất 2). Bot sẽ không gửi giao dịch.')
   } else {
-    log(
-      `Các RPC lệch nhau ${(c.deviationPct ?? 0).toFixed(2)}%, quá 1%. Bot sẽ không gửi giao dịch.`,
-    )
+    log(c.blockReason ?? 'Không đủ RPC khớp quanh giá giữa. Bot sẽ không gửi giao dịch.')
   }
 }
 

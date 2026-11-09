@@ -23,7 +23,15 @@ export type BotStatus = {
     medianPrice: number | null
     medianTick: number | null
     blockReason: string | null
-    samples: { url: string; ok: boolean; price: number | null; tick: number | null; error: string | null }[]
+    samples: {
+      url: string
+      ok: boolean
+      price: number | null
+      tick: number | null
+      error: string | null
+      outlier?: boolean
+      deviationPct?: number | null
+    }[]
   } | null
   positions: {
     tokenId: string

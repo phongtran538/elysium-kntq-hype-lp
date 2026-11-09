@@ -6,6 +6,7 @@ function host(url: string): string {
 
 function shortErr(error: string | undefined): string {
   const raw = (error ?? 'lỗi').replace(/\s+/g, ' ')
+  if (/429|rate limit|too many requests/i.test(raw)) return 'bị giới hạn (429)'
   if (/timed out|timeout|took too long/i.test(raw)) return 'hết giờ, không đọc được slot0'
   if (/failed to fetch|network|econn|fetch/i.test(raw)) return 'không kết nối được'
   const cut = raw.split(/request body/i)[0]?.trim() || raw

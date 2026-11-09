@@ -1,12 +1,7 @@
-import {
-  createPublicClient,
-  http,
-  fallback,
-  type PublicClient,
-  type Transport,
-} from 'viem'
-import { elysium } from '../config/chain'
+import { type PublicClient } from 'viem'
 import { RPC_URLS, type RpcUrl } from '../config/rpc'
+import { isRateLimitMessage } from './rpcHealth'
+import { createResilientClient } from './resilientRpc'
 
 let activeIndex = 0
 const listeners = new Set<(url: RpcUrl, index: number) => void>()
@@ -27,30 +22,20 @@ function notify() {
 
 export function rotateRpc(reason?: string): RpcUrl {
   activeIndex = (activeIndex + 1) % RPC_URLS.length
-  console.warn('[rpc] failover', reason, '→', RPC_URLS[activeIndex])
+  const brief = !reason ? '' : isRateLimitMessage(reason) ? '429' : reason.replace(/\s+/g, ' ').slice(0, 80)
+  console.warn(`[rpc] đổi RPC${brief ? ` vì ${brief}` : ''} → ${RPC_URLS[activeIndex]}`)
   notify()
   return RPC_URLS[activeIndex]!
 }
 
-function buildTransport(): Transport {
-  // Prefer ordered failover; individual http with short timeout
-  return fallback(
-    RPC_URLS.map((url) =>
-      http(url, {
-        timeout: 12_000,
-        retryCount: 0, // never silent-retry sends; reads may rotate manually
-      }),
-    ),
-    { rank: false },
-  )
-}
-
-export const publicClient: PublicClient = createPublicClient({
-  chain: elysium,
-  transport: buildTransport(),
-  // Elysium's chain config has no multicall3 entry. Batching reads throws
-  // "does not support contract multicall3", so each read is its own eth_call.
-  batch: { multicall: false },
+export const publicClient: PublicClient = createResilientClient(RPC_URLS, {
+  onUsed(url) {
+    const index = RPC_URLS.indexOf(url as RpcUrl)
+    if (index >= 0 && index !== activeIndex) {
+      activeIndex = index
+      notify()
+    }
+  },
 })
 
 /** Read with manual failover on failure */

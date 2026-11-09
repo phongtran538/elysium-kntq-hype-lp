@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { isRateLimitMessage, isTimeoutMessage } from '../../src/lib/rpcHealth'
 
 const logFile = path.resolve(process.cwd(), 'logs', 'bot.log')
 const ring: string[] = []
@@ -45,6 +46,8 @@ export function log(message: string): void {
 }
 
 export function safeError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e)
-  return msg.replace(/\s+/g, ' ').slice(0, 500)
+  const msg = (e instanceof Error ? e.message : String(e)).replace(/\s+/g, ' ')
+  if (isRateLimitMessage(msg)) return 'RPC bị giới hạn (429).'
+  if (isTimeoutMessage(msg)) return 'RPC hết giờ chờ.'
+  return msg.slice(0, 180)
 }

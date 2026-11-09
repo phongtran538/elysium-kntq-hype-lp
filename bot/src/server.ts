@@ -11,8 +11,11 @@ import { log, recentLogs, subscribeLogs } from './log'
 import { runLoop } from './execute'
 import { observePositions, resetBaseline, walletPnl, type SeenPosition } from './pnlStore'
 import { fetchHypeUsd } from './hypeUsd'
+import { setRpcLogger } from '../../src/lib/resilientRpc'
 import { buildSnapshot, type PublicStatus } from './snapshot'
 import { parseUnits } from '../../src/lib/math'
+
+setRpcLogger((line) => log(line))
 
 const TOKEN_FILE = path.resolve(process.cwd(), 'bot', '.auth-token')
 const ENV_FILE = path.resolve(process.cwd(), '.env')

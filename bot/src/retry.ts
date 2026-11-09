@@ -36,9 +36,10 @@ export async function withBackoff<T>(
     } catch (e) {
       last = e
       if (!isTransient(e) || i === attempts) throw e
-      log(
-        `${label}: lỗi mạng (${safeError(e)}). Thử lại lần ${i + 1}/${attempts} sau ${wait / 1000} giây.`,
-      )
+      const brief = safeError(e)
+      if (!brief.includes('bị giới hạn (429)') && !brief.includes('hết giờ')) {
+        log(`${label}: lỗi mạng (${brief}). Thử lại lần ${i + 1}/${attempts} sau ${wait / 1000} giây.`)
+      }
       await sleep(wait)
       wait *= 2
     }

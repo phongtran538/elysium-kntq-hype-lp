@@ -24,6 +24,7 @@ export type BotStatus = {
     deviationPct: number | null
     medianPrice: number | null
     medianTick: number | null
+    medianSqrtPriceX96: string | null
     blockReason: string | null
     samples: {
       url: string
@@ -51,6 +52,7 @@ export type BotStatus = {
     feesKnown: boolean
     amount0: string
     amount1: string
+    liquidity?: string
   }[]
   history: { at: number; kind: string; summary: string }[]
   pnl: WalletPnl | null

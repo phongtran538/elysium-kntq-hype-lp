@@ -4,11 +4,12 @@ import { publicClient } from '../lib/rpcClient'
 import { erc20Abi } from '../abis/erc20'
 import { KNTQ } from '../config/contracts'
 
-export function useBalances() {
+export function useBalances(enabled = true, pollMs = 60_000) {
   const { address, isConnected } = useAccount()
   const [hype, setHype] = useState(0n)
   const [kntq, setKntq] = useState(0n)
   const [error, setError] = useState<string | null>(null)
+  const [updatedAt, setUpdatedAt] = useState(0)
 
   const refresh = useCallback(async () => {
     if (!address) {
@@ -28,6 +29,7 @@ export function useBalances() {
       ])
       setHype(native)
       setKntq(token)
+      setUpdatedAt(Date.now())
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -35,11 +37,11 @@ export function useBalances() {
   }, [address])
 
   useEffect(() => {
-    if (!isConnected) return
+    if (!isConnected || !enabled) return
     void refresh()
-    const id = setInterval(() => void refresh(), 12_000)
+    const id = setInterval(() => void refresh(), pollMs)
     return () => clearInterval(id)
-  }, [isConnected, refresh])
+  }, [isConnected, refresh, enabled, pollMs])
 
-  return { hype, kntq, refresh, error }
+  return { hype, kntq, refresh, error, updatedAt }
 }

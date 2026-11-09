@@ -23,6 +23,7 @@ import {
   rangeEdgeStatus,
 } from '../../src/lib/math'
 import { crossCheckPoolPrice, type PriceConsensus } from '../../src/lib/priceCheck'
+import { createResilientClient } from '../../src/lib/resilientRpc'
 import {
   accountFrom,
   assertChain,
@@ -144,10 +145,14 @@ export async function runStatus(cfg: BotConfig): Promise<number> {
   log(`Ví: ${account.address}`)
   const { publicClient } = makeClients(consensus.chosenRpc, account)
   await assertChain(publicClient)
+  const reader = createResilientClient(cfg.rpcUrls)
   const [hype, kntq, positions] = await Promise.all([
-    hypeBalance(publicClient, account.address),
-    kntqBalance(publicClient, account.address),
-    loadPositions(publicClient, account.address, consensus.medianSqrtPriceX96),
+    hypeBalance(reader, account.address),
+    kntqBalance(reader, account.address),
+    loadPositions(reader, account.address, consensus.medianSqrtPriceX96, {
+      startBlock: cfg.startBlock,
+      cacheMs: Math.max(5_000, cfg.pollSeconds * 1000 - 2_000),
+    }),
   ])
   log(`Số dư: ${formatUnits(hype, 18, 4)} HYPE, ${formatUnits(kntq, 18, 4)} KNTQ.`)
   if (positions.length === 0) {
@@ -222,8 +227,12 @@ async function cycle(cfg: BotConfig, account: ReturnType<typeof accountFrom>): P
   }
   const { publicClient, walletClient } = makeClients(consensus.chosenRpc, account)
   await assertChain(publicClient)
+  const reader = createResilientClient(cfg.rpcUrls)
   const positions = await withBackoff('đọc vị thế', () =>
-    loadPositions(publicClient, account.address, consensus.medianSqrtPriceX96!),
+    loadPositions(reader, account.address, consensus.medianSqrtPriceX96!, {
+      startBlock: cfg.startBlock,
+      cacheMs: Math.max(5_000, cfg.pollSeconds * 1000 - 2_000),
+    }),
   )
   const state = readState()
 

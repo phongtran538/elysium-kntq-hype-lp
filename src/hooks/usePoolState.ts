@@ -14,7 +14,7 @@ export type PoolState = {
   stale: boolean
 }
 
-export function usePoolState(pollMs = 8_000) {
+export function usePoolState(pollMs = 60_000, enabled = true) {
   const [state, setState] = useState<PoolState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -57,6 +57,10 @@ export function usePoolState(pollMs = 8_000) {
   }, [])
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false)
+      return
+    }
     void refresh()
     const id = setInterval(() => void refresh(), pollMs)
     const staleId = setInterval(() => {
@@ -68,7 +72,7 @@ export function usePoolState(pollMs = 8_000) {
       clearInterval(id)
       clearInterval(staleId)
     }
-  }, [refresh, pollMs])
+  }, [refresh, pollMs, enabled])
 
   return { state, error, loading, refresh }
 }

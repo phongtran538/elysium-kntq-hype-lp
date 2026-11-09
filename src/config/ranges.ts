@@ -27,38 +27,38 @@ export type RangePreset = {
 export const RANGE_PRESETS: RangePreset[] = [
   {
     id: 'aggressive2',
-    label: '激进 ±2%',
+    label: 'Mạnh ±2%',
     pct: 2,
-    riskHint: '吃费密度最高，价格稍动就出区间，需频繁移仓。',
+    riskHint: 'Ăn phí dày nhất. Giá nhích một tí là ra khỏi khoảng, phải chuyển vị thế liên tục.',
   },
   {
     id: 'active5',
-    label: '积极 ±5%',
+    label: 'Nhanh ±5%',
     pct: 5,
-    riskHint: '吃费较快，中等波动时较易出区间。',
+    riskHint: 'Ăn phí khá nhanh. Giá dao động vừa là dễ ra khỏi khoảng.',
   },
   {
     id: 'balanced10',
-    label: '均衡 ±10%',
+    label: 'Cân bằng ±10%',
     pct: 10,
-    riskHint: '手续费密度与出区间风险较均衡，适合多数场景。',
+    riskHint: 'Phí và rủi ro ra khoảng khá cân. Hợp với đa số trường hợp.',
     recommended: true,
   },
   {
     id: 'conservative20',
-    label: '稳健 ±20%',
+    label: 'Chắc ±20%',
     pct: 20,
-    riskHint: '更耐波动，吃费密度低于窄区间，但仍远高于全区间。',
+    riskHint: 'Chịu sóng hơn. Ăn phí ít hơn khoảng hẹp, nhưng vẫn nhiều hơn full range.',
   },
   {
     id: 'full',
-    label: '全区间',
-    riskHint: '几乎永不出区间，但只占极少量活跃流动性，吃费极慢。',
+    label: 'Cả dải',
+    riskHint: 'Gần như không bao giờ ra khoảng, nhưng thanh khoản rất loãng nên ăn phí rất chậm.',
   },
   {
     id: 'custom',
-    label: '自定义',
-    riskHint: '手动填写 tick，须对齐 tickSpacing=200。',
+    label: 'Tự chọn',
+    riskHint: 'Tự gõ tick. Số tick phải chia hết cho 200.',
   },
 ]
 

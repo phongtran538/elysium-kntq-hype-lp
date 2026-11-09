@@ -46,30 +46,30 @@ export function PositionGrid({
   return (
     <section className="panel panel-positions">
       <div className="row between wrap gap">
-        <h2>持仓</h2>
+        <h2>Vị thế</h2>
         <label className="inline-label">
-          排序{' '}
+          Sắp xếp{' '}
           <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-            <option value="principal">本金 USD</option>
-            <option value="fees">待领收益</option>
-            <option value="apr">近期年化</option>
-            <option value="id">TokenId</option>
+            <option value="principal">Vốn USD</option>
+            <option value="fees">Phí chưa rút</option>
+            <option value="apr">Lãi năm</option>
+            <option value="id">Mã NFT</option>
           </select>
         </label>
       </div>
 
       <div className="quick-withdraw">
         <div className="quick-withdraw-head">
-          <strong>TokenId 快速撤池</strong>
-          <span className="muted small">列表为空或扫描失败时可直接填 NFT 编号</span>
+          <strong>Rút nhanh theo mã NFT</strong>
+          <span className="muted small">Danh sách trống hoặc quét lỗi thì điền số NFT vào đây</span>
         </div>
         <div className="row gap wrap">
           <label className="grow">
-            tokenId
+            Mã NFT
             <input
               value={manualTokenId}
               onChange={(e) => onManualTokenIdChange(e.target.value)}
-              placeholder="例如 827"
+              placeholder="ví dụ 827"
             />
           </label>
           <button
@@ -78,20 +78,20 @@ export function PositionGrid({
             disabled={!!sendBlockReason}
             onClick={onManualWithdraw}
           >
-            预览撤池 #{manualTokenId || '…'}
+            Xem trước rút #{manualTokenId || '…'}
           </button>
           <button className="btn" type="button" onClick={onRefresh}>
-            刷新列表
+            Làm mới danh sách
           </button>
         </div>
       </div>
 
       {sendBlockReason && <p className="err">{sendBlockReason}</p>}
-      {loading && <p className="muted">读取链上仓位…</p>}
-      {error && <p className="err">持仓读取失败：{error}</p>}
+      {loading && <p className="muted">Đang đọc vị thế trên chain…</p>}
+      {error && <p className="err">Đọc vị thế lỗi: {error}</p>}
       {!loading && !error && sorted.length === 0 && (
         <p className="muted">
-          暂无本池活跃仓位（已隐藏 liquidity=0）。若刚建仓，点刷新或用上方 TokenId 撤池。
+          Chưa có vị thế đang mở trong pool này (đã ẩn chỗ liquidity = 0). Vừa tạo xong thì bấm làm mới, hoặc rút bằng mã NFT phía trên.
         </p>
       )}
       <div className="cards">

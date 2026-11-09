@@ -62,5 +62,5 @@ export async function withRpcFailover<T>(fn: (client: PublicClient) => Promise<T
       rotateRpc(String(e))
     }
   }
-  throw lastErr instanceof Error ? lastErr : new Error('全部 RPC 不可用')
+  throw lastErr instanceof Error ? lastErr : new Error('Tất cả RPC đều không dùng được')
 }

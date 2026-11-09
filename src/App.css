@@ -260,6 +260,35 @@ input, select {
 .risk-box.il { background: #0d1528; border: 1px solid var(--border); }
 .il-table { width: 100%; border-collapse: collapse; margin-top: 0.4rem; font-size: 0.78rem; }
 .il-table th, .il-table td { text-align: left; padding: 0.2rem 0.35rem; border-bottom: 1px solid var(--border); }
+.range-wrap { margin: 0.4rem 0; }
+.range-bar {
+  position: relative;
+  height: 18px;
+  border-radius: 999px;
+  background: #0d1528;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.range-zone { position: absolute; top: 0; bottom: 0; background: rgba(240,180,41,0.28); }
+.range-mark {
+  position: absolute;
+  top: -3px;
+  width: 3px;
+  height: 24px;
+  background: var(--accent);
+}
+.range-mark.out { background: var(--danger); }
+.range-legend { display: flex; justify-content: space-between; gap: 0.4rem; font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; }
+.bot-log {
+  max-height: 280px;
+  overflow: auto;
+  background: #0d1528;
+  border-radius: 10px;
+  padding: 0.7rem;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 @media (max-width: 960px) {
   .layout-main {

@@ -48,10 +48,10 @@ export function ConnectBar() {
     <header className="topbar">
       <div>
         <h1>KNTQ / HYPE LP</h1>
-        <p className="muted">Elysium Uniswap V4 · 真实链上数据 · 不自动放宽滑点</p>
+        <p className="muted">Elysium Uniswap V4 · số liệu thật trên chain · không tự nới trượt giá</p>
       </div>
       <div className="topbar-actions">
-        <span className="pill" title="当前 RPC">
+        <span className="pill" title="RPC đang dùng">
           RPC {rpc.replace('https://', '')}
         </span>
         {!isConnected ? (
@@ -60,18 +60,18 @@ export function ConnectBar() {
             disabled={isPending || connectors.length === 0}
             onClick={() => connect({ connector: connectors[0]! })}
           >
-            连接浏览器钱包
+            Kết nối ví
           </button>
         ) : (
           <>
             {chainId !== CHAIN_ID && (
               <button className="btn warn" onClick={() => void ensureElysium()}>
-                切换到 Elysium (99901)
+                Chuyển sang Elysium (99901)
               </button>
             )}
             <span className="pill mono">{short}</span>
             <button className="btn" onClick={() => disconnect()}>
-              断开
+              Ngắt kết nối
             </button>
           </>
         )}

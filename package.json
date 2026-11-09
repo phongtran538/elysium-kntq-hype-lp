@@ -12,7 +12,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "bot": "tsx bot/src/index.ts"
+    "bot": "tsx bot/src/index.ts",
+    "bot:server": "tsx bot/src/server.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "5.107.1",

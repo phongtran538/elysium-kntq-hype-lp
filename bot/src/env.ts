@@ -13,6 +13,8 @@ export type BotConfig = {
   maxGas: bigint
   dryRun: boolean
   gasReserveHype: string
+  /** First Transfer-log scan starts here (or at a known mint), never at block 0. */
+  startBlock: bigint
 }
 
 function loadDotEnv(file = path.resolve(process.cwd(), '.env')): void {
@@ -65,6 +67,13 @@ function parseDryRun(): boolean {
   throw new Error('DRY_RUN phải là true hoặc false')
 }
 
+function parseStartBlock(): bigint {
+  const raw = process.env.START_BLOCK?.trim()
+  if (!raw) return 3_300_000n
+  if (!/^\d+$/.test(raw)) throw new Error('START_BLOCK phải là số block, ví dụ 3300000')
+  return BigInt(raw)
+}
+
 function parseRpcUrls(): readonly string[] {
   const raw = process.env.RPC_URLS?.trim()
   const urls = raw
@@ -102,7 +111,8 @@ export function loadConfig(): BotConfig {
     rpcUrls: parseRpcUrls(),
     rangePct: requiredNumber('RANGE_PCT', 20, 0.1, 90),
     triggerPct: requiredNumber('TRIGGER_PCT', 5, 0, 50),
-    pollSeconds: requiredNumber('POLL_SECONDS', 30, 5, 86_400),
+    pollSeconds: requiredNumber('POLL_SECONDS', 60, 5, 86_400),
+    startBlock: parseStartBlock(),
     maxSlippageBps: requiredNumber('MAX_SLIPPAGE_BPS', 50, 0, 2_000),
     minRebalanceIntervalMinutes: requiredNumber('MIN_REBALANCE_INTERVAL_MINUTES', 60, 0, 10_080),
     maxGas: BigInt(Math.floor(maxGasNum)),

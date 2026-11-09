@@ -1,9 +1,11 @@
 import { formatUnits, rangeEdgeStatus } from '../../src/lib/math'
 import { crossCheckPoolPrice, type PriceConsensus } from '../../src/lib/priceCheck'
-import { accountFrom, hypeBalance, kntqBalance, makeClients } from './chain'
+import { createResilientClient } from '../../src/lib/resilientRpc'
+import { accountFrom, hypeBalance, kntqBalance } from './chain'
 import type { BotConfig } from './env'
 import { fetchHypeUsd } from './hypeUsd'
 import { getHistory } from './history'
+import { log, safeError } from './log'
 import { observePositions, walletPnl, type SeenPosition, type WalletPnl } from './pnlStore'
 import { loadPositions } from './positions'
 
@@ -23,6 +25,7 @@ export type PublicPosition = {
   feesKnown: boolean
   amount0: string
   amount1: string
+  liquidity: string
 }
 
 export type PublicStatus = {
@@ -46,6 +49,7 @@ export type PublicStatus = {
     deviationPct: number | null
     medianPrice: number | null
     medianTick: number | null
+    medianSqrtPriceX96: string | null
     blockReason: string | null
     samples: {
       url: string
@@ -66,6 +70,7 @@ export type PublicStatus = {
 function shortErr(error: string | undefined): string | null {
   if (!error) return null
   const raw = error.replace(/\s+/g, ' ')
+  if (/429|rate limit|too many requests/i.test(raw)) return 'bị giới hạn (429)'
   if (/timed out|timeout|took too long/i.test(raw)) return 'hết giờ'
   return (raw.split(/request body/i)[0] ?? raw).trim().slice(0, 80)
 }
@@ -77,6 +82,7 @@ function priceView(c: PriceConsensus | null) {
     deviationPct: c.deviationPct,
     medianPrice: c.medianPrice,
     medianTick: c.medianTick,
+    medianSqrtPriceX96: c.medianSqrtPriceX96 == null ? null : c.medianSqrtPriceX96.toString(),
     blockReason: c.blockReason,
     samples: c.samples.map((s) => ({
       url: s.url,
@@ -126,18 +132,16 @@ export async function buildSnapshot(
     }
     const account = accountFrom(cfg.privateKey)
     base.wallet = account.address
-    const { publicClient } = makeClients(consensus.chosenRpc, account)
-    try {
-      const [hype, kntq] = await Promise.all([
-        hypeBalance(publicClient, account.address),
-        kntqBalance(publicClient, account.address),
-      ])
-      base.balances = { hype: formatUnits(hype, 18, 4), kntq: formatUnits(kntq, 18, 4) }
-    } catch (e) {
-      base.error = e instanceof Error ? e.message.slice(0, 180) : 'Không đọc được số dư'
-    }
+    const reader = createResilientClient(cfg.rpcUrls)
+    const cacheMs = Math.max(5, cfg.pollSeconds) * 1000 - 2_000
+    const balances = await cachedBalances(reader, account.address, cacheMs)
+    if (balances) base.balances = balances
+    else base.error = 'Không đọc được số dư'
     const hypeUsd = await fetchHypeUsd()
-    const positions = await loadPositions(publicClient, account.address, consensus.medianSqrtPriceX96)
+    const positions = await loadPositions(reader, account.address, consensus.medianSqrtPriceX96, {
+      startBlock: cfg.startBlock,
+      cacheMs,
+    })
     const seen: SeenPosition[] = positions.map((p) => ({
       tokenId: p.tokenId.toString(),
       amount0: p.amount0,
@@ -175,10 +179,32 @@ export async function buildSnapshot(
         feesKnown: p.feesKnown,
         amount0: formatUnits(p.amount0, 18, 4),
         amount1: formatUnits(p.amount1, 18, 4),
+        liquidity: p.liquidity.toString(),
       }
     })
   } catch (e) {
-    base.error = e instanceof Error ? e.message.slice(0, 180) : 'Không đọc được chain'
+    base.error = safeError(e)
   }
   return base
+}
+
+let balanceCache: { wallet: string; at: number; balances: { hype: string; kntq: string } } | null = null
+
+async function cachedBalances(
+  reader: ReturnType<typeof createResilientClient>,
+  wallet: `0x${string}`,
+  cacheMs: number,
+): Promise<{ hype: string; kntq: string } | null> {
+  if (balanceCache && balanceCache.wallet === wallet.toLowerCase() && Date.now() - balanceCache.at < cacheMs) {
+    return balanceCache.balances
+  }
+  try {
+    const [hype, kntq] = await Promise.all([hypeBalance(reader, wallet), kntqBalance(reader, wallet)])
+    const balances = { hype: formatUnits(hype, 18, 4), kntq: formatUnits(kntq, 18, 4) }
+    balanceCache = { wallet: wallet.toLowerCase(), at: Date.now(), balances }
+    return balances
+  } catch (e) {
+    log(`Không đọc được số dư: ${safeError(e)}`)
+    return balanceCache?.wallet === wallet.toLowerCase() ? balanceCache.balances : null
+  }
 }

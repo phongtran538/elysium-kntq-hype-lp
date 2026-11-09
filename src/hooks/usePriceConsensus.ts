@@ -3,8 +3,9 @@ import { crossCheckPoolPrice, type PriceConsensus } from '../lib/priceCheck'
 
 const LOADING = 'Đang đối chiếu giá từ nhiều RPC…'
 
-export function usePriceConsensus(pollMs = 15_000) {
+export function usePriceConsensus(pollMs = 60_000, enabled = true) {
   const [result, setResult] = useState<PriceConsensus | null>(null)
+  const [fetchedAt, setFetchedAt] = useState(0)
   const busy = useRef(false)
 
   const refresh = useCallback(async () => {
@@ -12,6 +13,7 @@ export function usePriceConsensus(pollMs = 15_000) {
     busy.current = true
     try {
       setResult(await crossCheckPoolPrice())
+      setFetchedAt(Date.now())
     } catch (e) {
       setResult({
         samples: [],
@@ -30,11 +32,12 @@ export function usePriceConsensus(pollMs = 15_000) {
   }, [])
 
   useEffect(() => {
+    if (!enabled) return
     void refresh()
     const id = setInterval(() => void refresh(), pollMs)
     return () => clearInterval(id)
-  }, [refresh, pollMs])
+  }, [refresh, pollMs, enabled])
 
   const blockReason = result == null ? LOADING : result.blockReason
-  return { result, blockReason, refresh }
+  return { result, blockReason, refresh, fetchedAt }
 }

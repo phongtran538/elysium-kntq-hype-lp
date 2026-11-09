@@ -1,6 +1,9 @@
+import { setRpcLogger } from '../../src/lib/resilientRpc'
 import { loadConfig } from './env'
 import { runLoop, runStatus } from './execute'
 import { log, safeError } from './log'
+
+setRpcLogger((line) => log(line))
 
 const statusMode = process.argv.includes('--status') || process.argv.includes('status')
 

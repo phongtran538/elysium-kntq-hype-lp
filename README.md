@@ -61,7 +61,7 @@ Dùng MetaMask hoặc ví tương tự trên trình duyệt. Nếu ví chưa có
 | RPC | https://rpc.elysium.kinetiq.xyz |
 | Explorer | https://elyscan.fun |
 
-Trang còn hỏi thêm mấy RPC dự phòng nếu cái đầu chết: `rpc.boxa.club`, `rpc.eleos.fun`, `rpc.elysiumswap.finance`, `rpc.stockium.fun`.
+Trang còn hỏi thêm mấy RPC dự phòng nếu cái đầu chết: `rpc-live.boxa.club`, `rpc.eleos.fun`, `rpc.stockium.fun`, `rpc.boxa.club`, `rpc.elysiumswap.finance`.
 
 Trong ví phải có một ít HYPE để trả gas, và KNTQ nếu bạn muốn bỏ KNTQ vào pool.
 
@@ -125,12 +125,15 @@ Sửa các dòng:
 - Để nguyên `DRY_RUN=true` lần đầu.
 - `RANGE_PCT=20` là khoảng mới ±20%.
 - `TRIGGER_PCT=5` là kích hoạt khi cách mép 5% hoặc đã ra ngoài.
-- `POLL_SECONDS=30` là hỏi giá mỗi 30 giây.
+- `POLL_SECONDS=60` là hỏi giá mỗi 60 giây. Để thấp hơn dễ bị RPC chặn.
+- `START_BLOCK=3300000` là block bắt đầu quét vị thế lần đầu. Đừng để 0. Bot nhớ block đã quét trong `bot\data` và lần sau chỉ đọc block mới. Vị thế đã biết (token 1844) được mint ở block 3328536.
 - `MAX_SLIPPAGE_BPS=50` là trượt giá tối đa 0,5%.
 - `MIN_REBALANCE_INTERVAL_MINUTES=60` là sau mỗi lần chuyển vị thế thì nghỉ ít nhất 60 phút.
 - `MAX_GAS=1500000` là nếu gas ước lượng cao hơn thì hủy.
 - `GAS_RESERVE_HYPE=0.08` là luôn để lại 0.08 HYPE trả gas, bot không đụng vào.
-- `RPC_URLS` là nhiều địa chỉ, cách nhau bằng dấu phẩy. RPC chính thức đứng đầu: `https://rpc.elysium.kinetiq.xyz`.
+- `RPC_URLS` là nhiều địa chỉ, cách nhau bằng dấu phẩy. Bot tự nghỉ RPC nào báo 429 rồi hỏi RPC kế tiếp.
+
+RPC công cộng `https://rpc.elysium.kinetiq.xyz` do Conduit chạy. Nhiều người dùng chung nên dễ báo Rate Limit Exceeded. Khóa miễn phí tăng hạn mức: vào [trang tạo khóa của Conduit](https://docs.conduit.xyz/rpc-nodes/getting-started/get-api-key), đăng ký, mở trang Nodes, bấm Create API key. Rồi sửa dòng RPC trong `.env` thành `https://rpc.elysium.kinetiq.xyz/KHÓA` (thay KHÓA bằng khóa vừa tạo, không có dấu ngoặc). Các RPC còn lại cứ để nguyên. Đừng gửi khóa đó cho ai.
 
 Save, tắt Notepad.
 

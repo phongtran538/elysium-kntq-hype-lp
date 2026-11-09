@@ -72,7 +72,7 @@ export function BotPanel() {
   const [form, setForm] = useState({
     rangePct: '20',
     triggerPct: '5',
-    pollSeconds: '30',
+    pollSeconds: '60',
     maxSlippageBps: '50',
     cooldown: '60',
   })
@@ -88,6 +88,7 @@ export function BotPanel() {
         if (stop) return
         setStatus(data)
         setOffline(false)
+        pollRef.ms = Math.max(60, data.config.pollSeconds || 60) * 1000
         if (!seeded.current) {
           seeded.current = true
           setForm({
@@ -102,8 +103,13 @@ export function BotPanel() {
         if (!stop) setOffline(true)
       }
     }
-    void pull()
-    const id = setInterval(() => void pull(), 4000)
+    const pollRef = { ms: 60_000 }
+    const tick = async () => {
+      await pull()
+      if (!stop) timer = window.setTimeout(() => void tick(), pollRef.ms)
+    }
+    let timer = 0
+    void tick()
     void openBotEvents(
       (line) => {
         setLogs((prev) => [...prev, line].slice(-200))
@@ -118,7 +124,7 @@ export function BotPanel() {
     })
     return () => {
       stop = true
-      clearInterval(id)
+      window.clearTimeout(timer)
       ac.abort()
     }
   }, [token])

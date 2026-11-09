@@ -7,11 +7,13 @@ import { PositionGrid } from './components/PositionGrid'
 import { TxPreviewModal } from './components/TxPreviewModal'
 import { PriceCheckBanner } from './components/PriceCheckBanner'
 import { BotPanel } from './components/BotPanel'
-import { botFetch, botToken, type WalletPnl } from './lib/botClient'
-import { usePoolState } from './hooks/usePoolState'
+import { botFetch, botToken, type BotStatus, type WalletPnl } from './lib/botClient'
+import { usePoolState, type PoolState } from './hooks/usePoolState'
 import { usePriceConsensus } from './hooks/usePriceConsensus'
 import { useBalances } from './hooks/useBalances'
+import { useBotFeed } from './hooks/useBotFeed'
 import { usePositions, type LpPosition } from './hooks/usePositions'
+import type { PriceConsensus } from './lib/priceCheck'
 import { useTxFlow } from './hooks/useTxFlow'
 import {
   applySlippageMin,
@@ -19,6 +21,7 @@ import {
   formatUnits,
   getAmountsForLiquidity,
   getSqrtRatioAtTick,
+  parseUnits,
 } from './lib/math'
 import { encodeCollectFees, encodeDecreaseLiquidity } from './lib/actions'
 import { publicClient } from './lib/rpcClient'
@@ -32,11 +35,94 @@ import {
 } from './config/contracts'
 import './App.css'
 
+function poolFromStatus(status: BotStatus): PoolState | null {
+  const sqrt = status.price?.medianSqrtPriceX96
+  const price = status.price?.medianPrice
+  const tick = status.price?.medianTick
+  if (!sqrt || price == null || tick == null) return null
+  return {
+    sqrtPriceX96: BigInt(sqrt),
+    tick,
+    lpFee: POOL_KEY.fee,
+    liquidity: 0n,
+    priceKntqPerHype: price,
+    fetchedAt: status.lastCheckAt ?? Date.now(),
+    stale: false,
+  }
+}
+
+function consensusFromStatus(status: BotStatus): PriceConsensus | null {
+  if (!status.price?.medianPrice || !status.price.medianSqrtPriceX96) return null
+  const samples = status.price.samples.map((sample) => ({
+    url: sample.url,
+    ok: sample.ok,
+    price: sample.price ?? undefined,
+    tick: sample.tick ?? undefined,
+    error: sample.error ?? undefined,
+    outlier: sample.outlier,
+    deviationPct: sample.deviationPct ?? undefined,
+  }))
+  return {
+    samples,
+    agreed: status.price.agreed,
+    deviationPct: status.price.deviationPct,
+    blockReason: status.price.blockReason,
+    agreeing: samples.filter((sample) => sample.ok && !sample.outlier).length,
+    medianPrice: status.price.medianPrice,
+    medianTick: status.price.medianTick,
+    medianSqrtPriceX96: BigInt(status.price.medianSqrtPriceX96),
+    chosenRpc: null,
+  }
+}
+
+function positionsFromStatus(status: BotStatus): LpPosition[] {
+  return status.positions.map((row) => ({
+    tokenId: BigInt(row.tokenId),
+    tickLower: row.tickLower,
+    tickUpper: row.tickUpper,
+    liquidity: BigInt(row.liquidity && /^\d+$/.test(row.liquidity) ? row.liquidity : '0'),
+    amount0: parseUnits(row.amount0, 18),
+    amount1: parseUnits(row.amount1, 18),
+    fees0: parseUnits(row.fees0, 18),
+    fees1: parseUnits(row.fees1, 18),
+    principalUsd: null,
+    feesUsd: null,
+    aprPct: null,
+    inRange: row.inRange,
+  }))
+}
+
 export default function App() {
   const { address, isConnected } = useAccount()
-  const { state: pool, error: poolErr, refresh: refreshPool } = usePoolState()
-  const { result: priceCheck, blockReason: sendBlockReason, refresh: refreshPrice } = usePriceConsensus()
-  const { hype, kntq, refresh: refreshBal } = useBalances()
+  const feed = useBotFeed()
+  const period = Math.max(60, feed.status?.config.pollSeconds ?? 60) * 1000
+  const priceFresh =
+    feed.online && feed.status?.price?.medianPrice != null && Boolean(feed.status.price.medianSqrtPriceX96)
+  const sameWallet = Boolean(
+    address && feed.status?.wallet && address.toLowerCase() === feed.status.wallet.toLowerCase(),
+  )
+  const localPool = usePoolState(period, !priceFresh)
+  const localPrice = usePriceConsensus(period, !priceFresh)
+  const serverBalFresh = priceFresh && sameWallet && feed.status?.balances != null
+  const localBal = useBalances(!serverBalFresh, period)
+  const serverPool = feed.status && priceFresh ? poolFromStatus(feed.status) : null
+  const pool =
+    localPool.state && serverPool
+      ? localPool.state.fetchedAt >= (feed.status?.lastCheckAt ?? 0)
+        ? localPool.state
+        : serverPool
+      : (localPool.state ?? serverPool)
+  const poolErr = priceFresh ? null : localPool.error
+  const refreshPool = localPool.refresh
+  const serverPrice = feed.status && priceFresh ? consensusFromStatus(feed.status) : null
+  const showServerPrice = serverPrice != null && localPrice.fetchedAt <= (feed.status?.lastCheckAt ?? 0)
+  const priceCheck = showServerPrice ? serverPrice : localPrice.result
+  const sendBlockReason = priceCheck ? priceCheck.blockReason : priceFresh ? null : localPrice.blockReason
+  const refreshPrice = localPrice.refresh
+  const showServerBal = Boolean(serverBalFresh && localBal.updatedAt <= (feed.status?.lastCheckAt ?? 0))
+  const hype = showServerBal ? parseUnits(feed.status?.balances?.hype ?? '0', 18) : localBal.hype
+  const kntq = showServerBal ? parseUnits(feed.status?.balances?.kntq ?? '0', 18) : localBal.kntq
+  const refreshBal = localBal.refresh
   // Optional: user can paste HYPE/USD; never fabricate
   const [hypeUsd, setHypeUsd] = useState('')
   const hypeUsdNum = useMemo(() => {
@@ -44,7 +130,19 @@ export default function App() {
     return Number.isFinite(n) && n > 0 ? n : null
   }, [hypeUsd])
 
-  const { positions, loading, error: posError, refresh: refreshPos } = usePositions(pool, hypeUsdNum)
+  const serverPositions = useMemo(
+    () => (priceFresh && sameWallet && feed.status ? positionsFromStatus(feed.status) : null),
+    [priceFresh, sameWallet, feed.status],
+  )
+  const localPositions = usePositions(pool, hypeUsdNum, {
+    enabled: serverPositions == null,
+    pollMs: period,
+  })
+  const showServerPos = serverPositions != null && localPositions.updatedAt <= (feed.status?.lastCheckAt ?? 0)
+  const positions = showServerPos ? serverPositions : localPositions.positions
+  const loading = showServerPos ? false : localPositions.loading
+  const posError = showServerPos ? null : localPositions.error
+  const refreshPos = localPositions.refresh
   const tx = useTxFlow()
   const [slippage, setSlippage] = useState(String(DEFAULT_SLIPPAGE_PCT))
   const [deadlineMin, setDeadlineMin] = useState(String(DEFAULT_DEADLINE_MIN))

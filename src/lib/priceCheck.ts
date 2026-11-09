@@ -4,6 +4,8 @@ import { elysium } from '../config/chain'
 import { POOL_ID, STATE_VIEW } from '../config/contracts'
 import { OFFICIAL_RPC, RPC_URLS } from '../config/rpc'
 import { priceFromSqrtX96 } from './math'
+import { shortenRpcError } from './rpcHealth'
+import { currentPriceUrls, observePriceSamples } from './resilientRpc'
 
 /** A quote farther than this from the median is an outlier and is ignored. */
 export const MAX_PRICE_DEVIATION_PCT = 1
@@ -132,20 +134,27 @@ export function summarizeRpcPrices(
   }
 }
 
-/** Read slot0 from each RPC on its own, then keep the ones near the median. */
+/** Read slot0 from each healthy RPC, skip price outliers, then keep the ones near the median. */
 export async function crossCheckPoolPrice(
   urls: readonly string[] = RPC_URLS,
 ): Promise<PriceConsensus> {
+  const list = currentPriceUrls(urls)
+  if (list.length === 0) {
+    return summarizeRpcPrices(
+      urls.map((url) => ({ url, ok: false, error: 'đang nghỉ vì bị giới hạn (429)' })),
+    )
+  }
   const samples: RpcPriceSample[] = await Promise.all(
-    urls.map(async (url) => {
+    list.map(async (url) => {
       try {
         const slot = await readSlot0(url)
         return { url, ok: true, ...slot }
       } catch (e) {
-        const error = e instanceof Error ? e.message : String(e)
+        const error = shortenRpcError(e instanceof Error ? e.message : String(e))
         return { url, ok: false, error }
       }
     }),
   )
+  observePriceSamples(samples)
   return summarizeRpcPrices(samples)
 }

@@ -11,6 +11,7 @@ import {
   getLiquidityForAmount1,
   getLiquidityForAmounts,
   getSqrtRatioAtTick,
+  liquidityUnderSlippageCap,
   impermanentLossPct,
   parseUnits,
   priceFromSqrtX96,
@@ -131,6 +132,36 @@ describe('fees, slippage, units, position info', () => {
 
   it('applies user slippage without going negative', () => {
     expect(applySlippageMax(1_000_000n, 0.5)).toBe(1_005_000n)
+
+    const sqrtP = getSqrtRatioAtTick(0)
+    const sqrtA = getSqrtRatioAtTick(-2_000)
+    const sqrtB = getSqrtRatioAtTick(2_000)
+    const available0 = 10n ** 18n
+    const available1 = 607n * 10n ** 17n
+    const sized = liquidityUnderSlippageCap({
+      sqrtPriceX96: sqrtP,
+      sqrtLowerX96: sqrtA,
+      sqrtUpperX96: sqrtB,
+      available0,
+      available1,
+      slippagePct: 0.5,
+    })
+    const full = getLiquidityForAmounts(sqrtP, sqrtA, sqrtB, available0, available1)
+    expect(sized.liquidity < full).toBe(true)
+    expect(sized.amount0Max <= available0).toBe(true)
+    expect(sized.amount1Max <= available1).toBe(true)
+    expect(sized.used0 <= sized.amount0Max).toBe(true)
+    expect(sized.used1 <= sized.amount1Max).toBe(true)
+    const moved = liquidityUnderSlippageCap({
+      sqrtPriceX96: getSqrtRatioAtTick(200),
+      sqrtLowerX96: sqrtA,
+      sqrtUpperX96: sqrtB,
+      available0,
+      available1,
+      slippagePct: 0.5,
+    })
+    expect(moved.amount1Max <= available1).toBe(true)
+    expect(moved.used1 <= moved.amount1Max).toBe(true)
     expect(applySlippageMin(1_000_000n, 0.5)).toBe(995_000n)
     expect(applySlippageMin(10n, 50)).toBe(5n)
     expect(applySlippageMin(1n, 100)).toBe(0n)

@@ -48,5 +48,8 @@ export const TOKEN_META = {
 } as const
 
 export const STALE_MS = 20_000
+/** Collect / withdraw. Add-liquidity uses DEFAULT_MINT_SLIPPAGE_PCT. */
 export const DEFAULT_SLIPPAGE_PCT = 0.5
+/** Room for the price to move between the quote and the mint. */
+export const DEFAULT_MINT_SLIPPAGE_PCT = 1
 export const DEFAULT_DEADLINE_MIN = 20

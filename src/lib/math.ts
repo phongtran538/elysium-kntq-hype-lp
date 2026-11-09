@@ -163,6 +163,50 @@ export function applySlippageMin(amount: bigint, slippagePct: number): bigint {
   return v < 0n ? 0n : v
 }
 
+/**
+ * Size liquidity from a reduced budget so
+ * used * (1 + slippage) stays within the available balance.
+ * Do not size from the full balance and then set max = used * (1 + slippage),
+ * because that max can exceed the wallet or a later price move.
+ */
+export function liquidityUnderSlippageCap(args: {
+  sqrtPriceX96: bigint
+  sqrtLowerX96: bigint
+  sqrtUpperX96: bigint
+  available0: bigint
+  available1: bigint
+  slippagePct: number
+}): {
+  liquidity: bigint
+  used0: bigint
+  used1: bigint
+  amount0Max: bigint
+  amount1Max: bigint
+} {
+  const bps = BigInt(Math.max(0, Math.round(args.slippagePct * 100)))
+  const denom = 10_000n + bps
+  const budget0 = denom === 0n ? 0n : (args.available0 * 10_000n) / denom
+  const budget1 = denom === 0n ? 0n : (args.available1 * 10_000n) / denom
+  const liquidity = getLiquidityForAmounts(
+    args.sqrtPriceX96,
+    args.sqrtLowerX96,
+    args.sqrtUpperX96,
+    budget0,
+    budget1,
+  )
+  const used = getAmountsForLiquidity(
+    args.sqrtPriceX96,
+    args.sqrtLowerX96,
+    args.sqrtUpperX96,
+    liquidity,
+  )
+  let amount0Max = applySlippageMax(used.amount0, Math.max(0, args.slippagePct))
+  let amount1Max = applySlippageMax(used.amount1, Math.max(0, args.slippagePct))
+  if (amount0Max > args.available0) amount0Max = args.available0
+  if (amount1Max > args.available1) amount1Max = args.available1
+  return { liquidity, used0: used.amount0, used1: used.amount1, amount0Max, amount1Max }
+}
+
 export function formatUnits(value: bigint, decimals: number, digits = 6): string {
   const neg = value < 0n
   const v = neg ? -value : value

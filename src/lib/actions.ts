@@ -118,7 +118,9 @@ export function encodeMintPosition(args: {
     [{ type: 'address' }, { type: 'address' }],
     [POOL_KEY.currency0, POOL_KEY.currency1],
   )
-  // Native currency0 → SETTLE_PAIR + SWEEP excess ETH
+  // currency0 is native HYPE. msg.value is amount0Max; anything not pulled
+  // stays on the PositionManager unless SWEEP targets address(0).
+  // Permit2 pulls the exact KNTQ debt, so do not sweep KNTQ here.
   const sweepParams = encodeAbiParameters(
     [{ type: 'address' }, { type: 'address' }],
     [NATIVE, args.recipient],
@@ -153,6 +155,7 @@ export function encodeIncreaseLiquidity(args: {
     [{ type: 'address' }, { type: 'address' }],
     [POOL_KEY.currency0, POOL_KEY.currency1],
   )
+  // Same as mint: sweep leftover native HYPE, not KNTQ.
   const sweepParams = encodeAbiParameters(
     [{ type: 'address' }, { type: 'address' }],
     [NATIVE, args.recipient],

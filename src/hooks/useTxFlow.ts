@@ -14,8 +14,9 @@ import {
   PERMIT2,
   POSITION_MANAGER,
 } from '../config/contracts'
+import { encodeIncreaseLiquidity, encodeMintPosition } from '../lib/actions'
 import { toChineseError } from '../lib/errors'
-import { formatUnits } from '../lib/math'
+import { formatUnits, getSqrtRatioAtTick, liquidityUnderSlippageCap } from '../lib/math'
 import { crossCheckPoolPrice } from '../lib/priceCheck'
 
 /** Permit2 amount is uint160 */
@@ -41,15 +42,29 @@ export type ContractLine = {
   detail: string
 }
 
+export type LiquidityResize = {
+  kind: 'mint' | 'increase'
+  tokenId?: bigint
+  tickLower: number
+  tickUpper: number
+  /** Caps already limited by min(input, balance). Slippage is applied inside the sizer. */
+  budget0: bigint
+  budget1: bigint
+  slippagePct: number
+}
+
 export type TxPreview = {
   title: string
   summary: string[]
   to: Address
   data: Hex
   value: bigint
+  deadline?: bigint
   approvals?: ApprovalStep[]
   /** PositionManager, Permit2, and KNTQ — shown before every step. */
   contracts: ContractLine[]
+  /** When set, the main tx is rebuilt from a fresh slot0 before eth_call. */
+  resize?: LiquidityResize
   /**
    * Which step the user is confirming right now.
    * 0..approvals.length-1 = that approval; approvals.length = main LP tx.
@@ -184,6 +199,7 @@ export function useTxFlow() {
       hypeDetail?: string
       permitDetail?: string
       kntqDetail?: string
+      resize?: LiquidityResize
     }) => {
       const data = encodeFunctionData({
         abi: positionManagerAbi,
@@ -216,6 +232,8 @@ export function useTxFlow() {
         value: opts.value,
         approvals,
         contracts: contractLines({ hypeDetail, permitDetail, kntqDetail }),
+        deadline: opts.deadline,
+        resize: opts.resize,
         stepIndex: 0,
       })
     },
@@ -238,31 +256,70 @@ export function useTxFlow() {
 
     const approvals = preview.approvals ?? []
     const isApproval = preview.stepIndex < approvals.length
-    const step = isApproval
-      ? approvals[preview.stepIndex]
-      : {
-          label: preview.title,
-          to: preview.to,
-          data: preview.data,
-          value: preview.value,
-        }
+    let to = isApproval ? approvals[preview.stepIndex]!.to : preview.to
+    let data = isApproval ? approvals[preview.stepIndex]!.data : preview.data
+    let value = (isApproval ? approvals[preview.stepIndex]!.value : preview.value) ?? 0n
+
+    if (!isApproval && preview.resize) {
+      if (!gate.medianSqrtPriceX96 || preview.deadline == null) {
+        setError('Không đọc lại được giá. Chưa mở ví.')
+        return
+      }
+      const plan = preview.resize
+      const sized = liquidityUnderSlippageCap({
+        sqrtPriceX96: gate.medianSqrtPriceX96,
+        sqrtLowerX96: getSqrtRatioAtTick(plan.tickLower),
+        sqrtUpperX96: getSqrtRatioAtTick(plan.tickUpper),
+        available0: plan.budget0,
+        available1: plan.budget1,
+        slippagePct: plan.slippagePct,
+      })
+      if (sized.liquidity === 0n) {
+        setError('Giá vừa đổi, số dư không còn đủ. Giảm khoảng giá hoặc thêm token. Chưa mở ví.')
+        return
+      }
+      const built =
+        plan.kind === 'mint'
+          ? encodeMintPosition({
+              tickLower: plan.tickLower,
+              tickUpper: plan.tickUpper,
+              liquidity: sized.liquidity,
+              amount0Max: sized.amount0Max,
+              amount1Max: sized.amount1Max,
+              recipient: address,
+            })
+          : encodeIncreaseLiquidity({
+              tokenId: plan.tokenId ?? 0n,
+              liquidity: sized.liquidity,
+              amount0Max: sized.amount0Max,
+              amount1Max: sized.amount1Max,
+              recipient: address,
+            })
+      data = encodeFunctionData({
+        abi: positionManagerAbi,
+        functionName: 'modifyLiquidities',
+        args: [built.unlockData, preview.deadline],
+      })
+      value = built.value
+      to = POSITION_MANAGER
+    }
 
     setSimulating(true)
     try {
       await publicClient.call({
         account: address,
-        to: step.to,
-        data: step.data,
-        value: step.value ?? 0n,
+        to,
+        data,
+        value,
       })
       setSimulating(false)
       setSending(true)
       // Exactly one send for this step — never auto-resubmit
       const hash = await walletClient.sendTransaction({
         account: address,
-        to: step.to,
-        data: step.data,
-        value: step.value ?? 0n,
+        to,
+        data,
+        value,
         chain: walletClient.chain,
       })
       await publicClient.waitForTransactionReceipt({ hash })

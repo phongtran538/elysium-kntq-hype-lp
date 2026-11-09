@@ -80,6 +80,8 @@ describe('local bot http server', () => {
       updateConfig: () => ({ ok: true, status: 200, message: 'Đã lưu' }),
       openEnv: () => ({ ok: true, message: 'mở file' }),
       reloadKey: () => ({ ok: true, message: 'đã đọc' }),
+      pnlSeen: () => ({ ok: true, status: 200, message: 'ok' }),
+      pnlReset: () => ({ ok: true, status: 200, message: 'ok' }),
       recentLogs: () => [],
       subscribeLogs: () => () => {},
     })

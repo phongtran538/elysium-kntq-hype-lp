@@ -9,7 +9,10 @@ import { validateConfigPatch, writeEnvValues } from './envfile'
 import { getHistory, loadHistory } from './history'
 import { log, recentLogs, subscribeLogs } from './log'
 import { runLoop } from './execute'
+import { observePositions, resetBaseline, walletPnl, type SeenPosition } from './pnlStore'
+import { fetchHypeUsd } from './hypeUsd'
 import { buildSnapshot, type PublicStatus } from './snapshot'
+import { parseUnits } from '../../src/lib/math'
 
 const TOKEN_FILE = path.resolve(process.cwd(), 'bot', '.auth-token')
 const ENV_FILE = path.resolve(process.cwd(), '.env')
@@ -70,8 +73,35 @@ function view(): PublicStatus {
     price: chain?.price ?? null,
     positions: chain?.positions ?? [],
     history: getHistory(),
+    pnl: chain?.pnl ?? null,
     error: chain?.error ?? null,
   }
+}
+
+function parseSeen(body: unknown): { error: string } | { wallet: string; price: number; positions: SeenPosition[] } {
+  if (!body || typeof body !== 'object') return { error: 'Thiếu dữ liệu' }
+  const src = body as Record<string, unknown>
+  if ('privateKey' in src || 'PRIVATE_KEY' in src) return { error: 'Không nhận private key từ trình duyệt' }
+  const wallet = String(src.wallet ?? '')
+  if (!/^0x[0-9a-fA-F]{40}$/.test(wallet)) return { error: 'Thiếu địa chỉ ví' }
+  const price = Number(src.price)
+  if (!(price > 0)) return { error: 'Thiếu giá' }
+  const rows = Array.isArray(src.positions) ? src.positions : []
+  const positions: SeenPosition[] = []
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue
+    const item = row as Record<string, unknown>
+    const tokenId = String(item.tokenId ?? '')
+    if (!tokenId) continue
+    positions.push({
+      tokenId,
+      amount0: parseUnits(String(item.amount0 ?? '0'), 18),
+      amount1: parseUnits(String(item.amount1 ?? '0'), 18),
+      fees0: parseUnits(String(item.fees0 ?? '0'), 18),
+      fees1: parseUnits(String(item.fees1 ?? '0'), 18),
+    })
+  }
+  return { wallet, price, positions }
 }
 
 const server = createBotServer({
@@ -125,6 +155,44 @@ const server = createBotServer({
       ok: true,
       message: 'Mở file .env trên máy và dán PRIVATE_KEY. Đừng gõ khoá vào trình duyệt, đừng gửi khoá cho ai.',
     }
+  },
+  async pnlSeen(body) {
+    const parsed = parseSeen(body)
+    if ('error' in parsed) return { ok: false, status: 400, message: parsed.error }
+    const hypeUsd = await fetchHypeUsd()
+    observePositions({
+      wallet: parsed.wallet,
+      price: parsed.price,
+      hypeUsd,
+      positions: parsed.positions,
+    })
+    const pnl = walletPnl({
+      wallet: parsed.wallet,
+      price: parsed.price,
+      hypeUsd,
+      positions: parsed.positions,
+    })
+    return { ok: true, status: 200, message: 'Đã ghi mốc', pnl }
+  },
+  pnlReset(body) {
+    if (!body || typeof body !== 'object') return { ok: false, status: 400, message: 'Thiếu dữ liệu' }
+    const src = body as Record<string, unknown>
+    if ('privateKey' in src || 'PRIVATE_KEY' in src) {
+      return { ok: false, status: 400, message: 'Không nhận private key từ trình duyệt' }
+    }
+    if (src.confirm !== true) {
+      return { ok: false, status: 400, message: 'Cần xác nhận trước khi đặt lại mốc.' }
+    }
+    const parsed = parseSeen(body)
+    if ('error' in parsed) return { ok: false, status: 400, message: parsed.error }
+    resetBaseline({
+      wallet: parsed.wallet,
+      tokenId: typeof src.tokenId === 'string' ? src.tokenId : null,
+      price: parsed.price,
+      hypeUsd: null,
+      positions: parsed.positions,
+    })
+    return { ok: true, status: 200, message: 'Đã đặt lại mốc tính.' }
   },
   reloadKey() {
     try {

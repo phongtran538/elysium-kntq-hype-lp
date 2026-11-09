@@ -47,6 +47,7 @@ import {
 import { loadPositions, type BotPosition } from './positions'
 import { withBackoff } from './retry'
 import { addHistory } from './history'
+import { markPositionClosed, notePendingMint, recordCollected, recordGas, recordSwapCost } from './pnlStore'
 import { readState, writeState } from './state'
 
 const DEADLINE_SECONDS = 10 * 60
@@ -418,6 +419,12 @@ async function closeOne(
     maxGas: cfg.maxGas,
     dryRun: cfg.dryRun,
     label: `Đóng vị thế #${position.tokenId}`,
+    onReceipt: ({ gasWei }) => {
+      const id = position.tokenId.toString()
+      recordGas(account.address, id, gasWei)
+      recordCollected(account.address, id, position.fees0, position.fees1)
+      markPositionClosed(account.address, id)
+    },
   })
 }
 
@@ -491,6 +498,8 @@ async function swapAndMint(
       amountOutMinimum: minOut,
       deadline: deadline(),
     })
+    const kntqBefore = kntq
+    const hypeBefore = hype
     await guardBalance(clients.publicClient, account.address, tx.value, reserve, 'Swap')
     await sendChecked({
       publicClient: clients.publicClient,
@@ -502,9 +511,19 @@ async function swapAndMint(
       maxGas: cfg.maxGas,
       dryRun: cfg.dryRun,
       label: 'Swap trong pool HYPE/KNTQ',
+      onReceipt: ({ gasWei }) => recordGas(account.address, null, gasWei),
     })
     hype = await hypeBalance(clients.publicClient, account.address)
     kntq = await kntqBalance(clients.publicClient, account.address)
+    if (!cfg.dryRun && again.medianPrice && again.medianPrice > 0) {
+      const actualOut = swap.zeroForOne ? kntq - kntqBefore : hype - hypeBefore
+      if (quoted > actualOut && actualOut >= 0n) {
+        const short = quoted - actualOut
+        const priceWei = BigInt(Math.round(again.medianPrice * 1e8)) * 10n ** 10n
+        const costHype = swap.zeroForOne ? (short * 10n ** 18n) / priceWei : short
+        recordSwapCost(account.address, null, costHype)
+      }
+    }
     bal0 = spendable(hype, reserve)
   } else {
     log('Không cần swap. Tỉ lệ hai đồng đã khớp khoảng mới.')
@@ -552,6 +571,9 @@ async function swapAndMint(
   log(
     `Mint tick [${next.tickLower}, ${next.tickUpper}], liquidity ${liq}, tối đa ${formatUnits(amount0Max, 18, 4)} HYPE + ${formatUnits(amount1Max, 18, 4)} KNTQ.`,
   )
+  if (!cfg.dryRun) {
+    notePendingMint(account.address, used.amount0, used.amount1, again.medianPrice ?? 0)
+  }
   await guardBalance(clients.publicClient, account.address, minted.value, reserve, 'Mint')
   await sendChecked({
     publicClient: clients.publicClient,
@@ -563,5 +585,6 @@ async function swapAndMint(
     maxGas: cfg.maxGas,
     dryRun: cfg.dryRun,
     label: 'Mint vị thế mới',
+    onReceipt: ({ gasWei }) => recordGas(account.address, null, gasWei),
   })
 }

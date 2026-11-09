@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { ConnectBar } from './components/ConnectBar'
 import { StaleBanner } from './components/StaleBanner'
@@ -7,6 +7,7 @@ import { PositionGrid } from './components/PositionGrid'
 import { TxPreviewModal } from './components/TxPreviewModal'
 import { PriceCheckBanner } from './components/PriceCheckBanner'
 import { BotPanel } from './components/BotPanel'
+import { botFetch, botToken, type WalletPnl } from './lib/botClient'
 import { usePoolState } from './hooks/usePoolState'
 import { usePriceConsensus } from './hooks/usePriceConsensus'
 import { useBalances } from './hooks/useBalances'
@@ -49,6 +50,7 @@ export default function App() {
   const [deadlineMin, setDeadlineMin] = useState(String(DEFAULT_DEADLINE_MIN))
   const [manualTokenId, setManualTokenId] = useState('')
   const [tab, setTab] = useState<'pool' | 'bot'>('pool')
+  const [manualPnl, setManualPnl] = useState<WalletPnl | null>(null)
   const slip = Number(slippage)
   const slipOk = Number.isFinite(slip) && slip >= 0
 
@@ -206,6 +208,35 @@ export default function App() {
     })
   }
 
+  useEffect(() => {
+    if (!address || !pool || loading || posError || !botToken()) return
+    const dec = (v: bigint) => {
+      const neg = v < 0n
+      const a = neg ? -v : v
+      const whole = a / 10n ** 18n
+      const frac = (a % 10n ** 18n).toString().padStart(18, '0').replace(/0+$/, '')
+      return `${neg ? '-' : ''}${whole}${frac ? '.' + frac : ''}`
+    }
+    void botFetch('/api/pnl/seen', {
+      wallet: address,
+      price: pool.priceKntqPerHype,
+      positions: positions.map((p) => ({
+        tokenId: p.tokenId.toString(),
+        amount0: dec(p.amount0),
+        amount1: dec(p.amount1),
+        fees0: dec(p.fees0),
+        fees1: dec(p.fees1),
+      })),
+    })
+      .then((res) => {
+        const pnl = (res as { pnl?: WalletPnl }).pnl
+        if (pnl?.positions) setManualPnl(pnl)
+      })
+      .catch(() => {
+        // Bot server is optional on this tab.
+      })
+  }, [address, pool, loading, posError, positions])
+
   function refreshAll() {
     void refreshPool()
     void refreshBal()
@@ -297,6 +328,7 @@ export default function App() {
             <PositionGrid
               positions={positions}
               pool={pool}
+              pnl={manualPnl}
               loading={loading}
               error={posError}
               manualTokenId={manualTokenId}

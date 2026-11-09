@@ -15,11 +15,10 @@ import {
   encodeV4ExactInputSingle,
 } from '../../src/lib/actions'
 import {
-  applySlippageMin,
   formatUnits,
-  getAmountsForLiquidity,
   getSqrtRatioAtTick,
   liquidityUnderSlippageCap,
+  principalSlippageMins,
   rangeEdgeStatus,
 } from '../../src/lib/math'
 import { crossCheckPoolPrice, type PriceConsensus } from '../../src/lib/priceCheck'
@@ -334,14 +333,19 @@ async function describePlan(
   const tick = consensus.medianTick!
   const next = rangeAroundTick(tick, cfg.rangePct)
   const slipPct = cfg.maxSlippageBps / 100
-  const amount0Min = applySlippageMin(position.amount0, slipPct)
-  const amount1Min = applySlippageMin(position.amount1, slipPct)
+  const mins = principalSlippageMins({
+    sqrtPriceX96: sqrt,
+    tickLower: position.tickLower,
+    tickUpper: position.tickUpper,
+    liquidity: position.liquidity,
+    slippagePct: slipPct,
+  })
   log('Kế hoạch (DRY_RUN, không gửi):')
   log(
     `1. Gọi PositionManager ${POSITION_MANAGER}: DECREASE_LIQUIDITY về 0 + TAKE_PAIR + BURN_POSITION cho #${position.tokenId}.`,
   )
   log(
-    `   Liquidity ${position.liquidity}. Tối thiểu nhận ${formatUnits(amount0Min, 18, 4)} HYPE + ${formatUnits(amount1Min, 18, 4)} KNTQ. Hạn ${DEADLINE_SECONDS / 60} phút. Trượt giá ${cfg.maxSlippageBps} bps.`,
+    `   Liquidity ${position.liquidity}. Tối thiểu trên phần gốc (không gồm phí) ${formatUnits(mins.amount0Min, 18, 4)} HYPE + ${formatUnits(mins.amount1Min, 18, 4)} KNTQ. Hạn ${DEADLINE_SECONDS / 60} phút. Trượt giá ${cfg.maxSlippageBps} bps.`,
   )
   const hype = await hypeBalance(client, owner)
   const kntq = await kntqBalance(client, owner)
@@ -392,19 +396,18 @@ async function closeOne(
   sqrtPriceX96: bigint,
 ): Promise<void> {
   const slipPct = cfg.maxSlippageBps / 100
-  const principal = getAmountsForLiquidity(
+  const mins = principalSlippageMins({
     sqrtPriceX96,
-    getSqrtRatioAtTick(position.tickLower),
-    getSqrtRatioAtTick(position.tickUpper),
-    position.liquidity,
-  )
-  const amount0Min = applySlippageMin(principal.amount0, slipPct)
-  const amount1Min = applySlippageMin(principal.amount1, slipPct)
+    tickLower: position.tickLower,
+    tickUpper: position.tickUpper,
+    liquidity: position.liquidity,
+    slippagePct: slipPct,
+  })
   const { unlockData, value } = encodeClosePosition({
     tokenId: position.tokenId,
     liquidity: position.liquidity,
-    amount0Min,
-    amount1Min,
+    amount0Min: mins.amount0Min,
+    amount1Min: mins.amount1Min,
     recipient: account.address,
   })
   const data = encodeFunctionData({
@@ -415,7 +418,7 @@ async function closeOne(
   const reserve = await reserveWei(publicClient, cfg)
   await guardBalance(publicClient, account.address, value, reserve, 'Đóng vị thế')
   log(
-    `Đóng #${position.tokenId}: giảm liquidity về 0, TAKE_PAIR, rồi burn NFT. Tối thiểu ${formatUnits(amount0Min, 18, 4)} HYPE + ${formatUnits(amount1Min, 18, 4)} KNTQ.`,
+    `Đóng #${position.tokenId}: giảm liquidity về 0, TAKE_PAIR, rồi burn NFT. Tối thiểu trên phần gốc (không gồm phí) ${formatUnits(mins.amount0Min, 18, 4)} HYPE + ${formatUnits(mins.amount1Min, 18, 4)} KNTQ.`,
   )
   await sendChecked({
     publicClient,

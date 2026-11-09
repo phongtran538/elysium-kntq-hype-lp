@@ -64,19 +64,19 @@ function contractLines(opts: {
 }): ContractLine[] {
   return [
     {
-      role: '主交易调用',
+      role: 'Giao dịch chính gọi tới',
       name: 'PositionManager',
       address: POSITION_MANAGER,
       detail: opts.hypeDetail,
     },
     {
-      role: '授权合约',
+      role: 'Hợp đồng cấp quyền',
       name: 'Permit2',
       address: PERMIT2,
       detail: opts.permitDetail,
     },
     {
-      role: '代币合约',
+      role: 'Hợp đồng token',
       name: 'KNTQ',
       address: KNTQ,
       detail: opts.kntqDetail,
@@ -125,7 +125,7 @@ export function useTxFlow() {
       })
       if (allowance < amount) {
         approvals.push({
-          label: '授权 KNTQ → Permit2',
+          label: 'Cho phép KNTQ → Permit2',
           to: KNTQ,
           data: encodeFunctionData({
             abi: erc20Abi,
@@ -133,8 +133,8 @@ export function useTxFlow() {
             args: [PERMIT2, amount],
           }),
           detail: [
-            `spender: Permit2 (${PERMIT2})`,
-            `额度: ${amountLabel} KNTQ（按本次需要 +0.1% 缓冲，非无限授权）`,
+            `Bên được tiêu: Permit2 (${PERMIT2})`,
+            `Hạn mức: ${amountLabel} KNTQ (đúng số lần này + 0,1%, không phải cấp quyền vô hạn)`,
           ],
         })
       }
@@ -153,7 +153,7 @@ export function useTxFlow() {
         const permitAmount =
           amount > PERMIT2_MAX_AMOUNT ? PERMIT2_MAX_AMOUNT : amount
         approvals.push({
-          label: 'Permit2 授权 KNTQ → PositionManager',
+          label: 'Permit2 cho PositionManager tiêu KNTQ',
           to: PERMIT2,
           data: encodeFunctionData({
             abi: permit2Abi,
@@ -161,9 +161,9 @@ export function useTxFlow() {
             args: [KNTQ, POSITION_MANAGER, permitAmount, expiry],
           }),
           detail: [
-            `spender: PositionManager (${POSITION_MANAGER})`,
-            `额度: ${formatUnits(permitAmount, 18, 6)} KNTQ（按本次需要，非 2^160-1）`,
-            `有效期: 约 1 小时（至 ${new Date(expiry * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })} Asia/Shanghai）`,
+            `Bên được tiêu: PositionManager (${POSITION_MANAGER})`,
+            `Hạn mức: ${formatUnits(permitAmount, 18, 6)} KNTQ (đúng số lần này, không phải 2^160-1)`,
+            `Hết hạn sau khoảng 1 giờ (đến ${new Date(expiry * 1000).toLocaleString('vi-VN')})`,
           ],
         })
       }
@@ -196,18 +196,18 @@ export function useTxFlow() {
       const hypeDetail =
         opts.hypeDetail ??
         (opts.value > 0n
-          ? `最多发送 ${formatUnits(opts.value, 18)} HYPE（原生币，作为 msg.value）`
-          : '不发送原生 HYPE（msg.value = 0）')
+          ? `Gửi tối đa ${formatUnits(opts.value, 18)} HYPE (tiền native, msg.value)`
+          : 'Không gửi HYPE native (msg.value = 0)')
       const permitDetail =
         opts.permitDetail ??
         (need > 0n
-          ? `额度不够时会先把 KNTQ approve 给这个合约，再由它授权给 PositionManager。额度 ${formatUnits(buffered, 18)} KNTQ（本次需要 +0.1%），约 1 小时，不是无限授权。`
-          : '这次不需要 Permit2 授权。')
+          ? `Nếu hạn mức chưa đủ, KNTQ sẽ được approve cho hợp đồng này, rồi nó cấp quyền cho PositionManager. Hạn mức ${formatUnits(buffered, 18)} KNTQ (số lần này + 0,1%), khoảng 1 giờ, không phải vô hạn.`
+          : 'Lần này không cần cấp quyền Permit2.')
       const kntqDetail =
         opts.kntqDetail ??
         (need > 0n
-          ? `最多动用 ${formatUnits(need, 18)} KNTQ`
-          : '这次不从钱包转出 KNTQ。')
+          ? `Dùng tối đa ${formatUnits(need, 18)} KNTQ`
+          : 'Lần này không chuyển KNTQ ra khỏi ví.')
       openPreview({
         title: opts.title,
         summary: opts.summary,
@@ -225,14 +225,14 @@ export function useTxFlow() {
   /** Confirm and send ONLY the current step (one approval OR the main tx). */
   const confirmAndSend = useCallback(async () => {
     if (!preview || !walletClient || !address) {
-      setError('请先连接钱包')
+      setError('Hãy kết nối ví trước')
       return
     }
     setError(null)
 
     const gate = await crossCheckPoolPrice()
     if (!gate.agreed) {
-      setError(gate.blockReason ?? '多个 RPC 的现价对不上，已取消')
+      setError(gate.blockReason ?? 'Giá các RPC không khớp, đã hủy')
       return
     }
 

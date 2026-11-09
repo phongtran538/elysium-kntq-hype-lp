@@ -24,7 +24,8 @@ try {
     const code = await runStatus(cfg)
     process.exit(code)
   }
-  await runLoop(cfg, () => stop)
+  const ok = await runLoop(cfg, () => stop)
+  if (!ok) process.exit(1)
 } catch (e) {
   log(safeError(e))
   process.exit(1)

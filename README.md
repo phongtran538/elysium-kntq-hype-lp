@@ -2,9 +2,7 @@
 
 Đây là trang web chạy trên máy bạn, để thêm thanh khoản vào pool HYPE/KNTQ trên Uniswap V4 (phí 1%, tickSpacing 200, không có hook) ở mạng Elysium. Elysium là L2 của Kinetiq, chain id `99901`, phí gas trả bằng HYPE.
 
-Tiền nằm trong ví của bạn. Trang này không giữ private key, không có server. Bạn tự bấm ký từng giao dịch trong ví.
-
-Giao diện trang đang là tiếng Trung. Phần dưới giải thích từng chỗ bằng tiếng Việt, làm theo thứ tự là được.
+Tiền nằm trong ví của bạn. Trang này không giữ private key. Bạn tự bấm ký từng giao dịch trong ví. Giao diện là tiếng Việt.
 
 ## Cần cài gì
 
@@ -26,7 +24,20 @@ git --version
 
 ## Chạy trang web
 
-Mở Command Prompt. Copy từng dòng, dán vào, Enter.
+Cách dễ nhất: mở thư mục project, **bấm đúp `Bat-dau.bat`**.
+
+Lần đầu nó tự làm mấy việc này:
+
+1. Nếu máy chưa có Node, nó báo bằng tiếng Việt và mở trang tải Node (cần 20.19 trở lên, hoặc 22.12 trở lên, đừng dùng bản 21). Cài xong thì bấm đúp lại.
+2. Nếu chưa cài thư viện, nó chạy `npm ci`.
+3. Nếu chưa có file `.env`, nó tạo từ `.env.example` và mở Notepad. Dán private key của **ví mới** vào dòng `PRIVATE_KEY`, Save, đóng Notepad. Đừng gửi khoá cho ai, đừng dán khoá vào trình duyệt.
+4. Nó bật trang web và chương trình bot (chỉ nghe trên máy bạn), rồi mở http://127.0.0.1:5173
+
+Trên trang có hai tab: **Pool** (tự thêm thanh khoản) và **Bot tự động**.
+
+Muốn tắt: **bấm đúp `Dung.bat`**.
+
+### Nếu bạn quen cửa sổ đen
 
 ```bat
 git clone https://github.com/phongtran538/elysium-kntq-hype-lp.git
@@ -35,13 +46,7 @@ npm ci
 npm run dev
 ```
 
-`npm ci` cài đúng phiên bản trong `package-lock.json`. Đừng dùng `npm install` trừ khi bạn cố ý sửa thư viện.
-
-Khi thấy dòng kiểu `Local: http://localhost:5173/`, mở trình duyệt vào:
-
-http://localhost:5173
-
-Muốn tắt trang thì quay lại cửa sổ đen, bấm **Ctrl+C**.
+Rồi mở http://127.0.0.1:5173 . Tab bot cần thêm một cửa sổ nữa: `npm run bot:server`. Muốn tắt thì Ctrl+C ở cả hai cửa sổ.
 
 ## Thêm mạng Elysium vào ví
 
@@ -80,7 +85,13 @@ Trong ví phải có một ít HYPE để trả gas, và KNTQ nếu bạn muốn
 
 ## Bot tự cân bằng lại
 
-Bot là chương trình chạy trong Command Prompt. Nó canh vị thế của **một ví riêng**. Khi giá sát mép khoảng (mặc định 5%) hoặc ra ngoài khoảng, nó sẽ:
+Mở tab **Bot tự động** trên trang (sau khi bấm đúp `Bat-dau.bat`). Tab này hiện giá từng RPC, khoảng vị thế (có thanh giá), đang trong hay ngoài khoảng, phí chưa rút, số dư ví bot, bot đang chạy hay tắt, chỉ xem hay chạy thật, lần kiểm tra gần nhất và lần tới, lịch sử, và nhật ký tiếng Việt.
+
+Nút **Chạy** / **Dừng**, công tắc chỉ xem hoặc chạy thật, và ô sửa khoảng, ngưỡng kích hoạt, số giây, trượt giá, thời gian nghỉ. Bấm lưu là ghi vào file `.env`. Bật chạy thật sẽ hỏi lại cho rõ.
+
+Khoá không bao giờ hiện trên trang. Nút **Mở file .env bằng Notepad** để dán khoá trên máy.
+
+Bot canh vị thế của **một ví riêng**. Khi giá sát mép khoảng (mặc định 5%) hoặc ra ngoài khoảng, nó sẽ:
 
 1. Rút hết thanh khoản, gom phí, đốt NFT vị thế.
 2. Swap **đúng pool V4 này** vừa đủ để hai đồng khớp khoảng mới (có trần trượt giá).
@@ -101,7 +112,7 @@ Mặc định `DRY_RUN=true`: nó **chỉ in ra** nó định làm gì, **không
 
 ### Tạo file .env
 
-Trong thư mục project (cùng chỗ có `package.json`), Command Prompt:
+`Bat-dau.bat` tự tạo và mở Notepad lần đầu. Nếu bạn làm tay trong Command Prompt:
 
 ```bat
 copy .env.example .env
@@ -127,37 +138,15 @@ File `.env` không được commit lên git. Đừng gửi file đó cho ai.
 
 ### Chạy thử, rồi mới chạy thật
 
-Xem giá và vị thế, không gửi gì:
+Trên tab **Bot tự động**, để chế độ **chỉ xem**, bấm **Chạy**. Nhật ký nói bot định làm gì, không gửi giao dịch. Log cũng ghi `logs\bot.log`.
 
-```bat
-npm run bot -- --status
-```
+Khi bạn đọc kế hoạch và chấp nhận rủi ro bên dưới, bấm **Đổi sang chạy thật**, đọc bảng cảnh báo, rồi bấm **Tôi hiểu, cho chạy thật**, rồi **Chạy**.
 
-Nó in giá từng RPC, khoảng tick của vị thế, đang trong hay ngoài khoảng, và phí chưa rút. Log cũng ghi vào `logs\bot.log`.
+Muốn dừng: bấm **Dừng** trên trang, hoặc bấm đúp `Dung.bat`. Giao dịch đã lên mạng thì vẫn chạy nốt.
 
-Chạy vòng lặp nhưng vẫn không gửi (vì DRY_RUN=true):
+Bot **không tự mở vị thế lần đầu**. Bạn tạo vị thế ở tab Pool trước, rồi mới để bot canh.
 
-```bat
-npm run bot
-```
-
-Đọc chữ tiếng Việt trên màn hình. Nó sẽ nói rõ sẽ gọi hợp đồng nào, swap bao nhiêu, mint khoảng nào.
-
-Khi bạn thấy kế hoạch đúng và chấp nhận rủi ro bên dưới, tắt bot bằng **Ctrl+C**, mở lại `.env`, đổi thành:
-
-```bat
-DRY_RUN=false
-```
-
-Rồi chạy lại:
-
-```bat
-npm run bot
-```
-
-Lúc này nó gửi giao dịch thật. Muốn dừng: bấm **Ctrl+C** một lần, đợi nó xong việc đang làm. Bấm lần nữa thì thoát ngay (giao dịch đã lên mạng vẫn cứ chạy).
-
-Bot **không tự mở vị thế lần đầu**. Bạn tạo vị thế trên trang web trước, rồi mới để bot canh.
+Nếu bạn thích cửa sổ đen: `npm run bot -- --status` chỉ in trạng thái, `npm run bot` chạy vòng lặp (Ctrl+C để dừng).
 
 ## Rủi ro, đọc trước khi bật DRY_RUN=false
 

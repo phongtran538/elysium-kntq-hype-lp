@@ -132,11 +132,11 @@ export function AddLiquidityForm({
       return
     }
     if (pool.stale) {
-      alert('行情已过期，请先刷新')
+      alert('Giá đã cũ, hãy làm mới trước')
       return
     }
     if (!(slip >= 0) || Number.isNaN(slip)) {
-      alert('请填写有效滑点（不会自动放宽）')
+      alert('Điền trượt giá hợp lệ (app không tự nới)')
       return
     }
     const amount0Max = applySlippageMax(previewCalc.used.amount0, slip)
@@ -152,14 +152,14 @@ export function AddLiquidityForm({
         recipient: address,
       })
       await tx.buildModifyTx({
-        title: `增加流动性 #${increaseTokenId}`,
+        title: `Thêm thanh khoản #${increaseTokenId}`,
         summary: [
-          `流动性 Δ ${previewCalc.liq.toString()}`,
-          `最多支付 ${formatUnits(amount0Max, 18)} HYPE + ${formatUnits(amount1Max, 18)} KNTQ`,
-          `滑点 ${slip}%（用户设定，不会自动加宽）`,
+          `Thanh khoản thêm ${previewCalc.liq.toString()}`,
+          `Trả tối đa ${formatUnits(amount0Max, 18)} HYPE + ${formatUnits(amount1Max, 18)} KNTQ`,
+          `Trượt giá ${slip}% (bạn đặt, app không tự nới)`,
           amount1Max > 0n
-            ? `KNTQ 授权将按本次上限 ${formatUnits(amount1Max, 18)}（+0.1% 缓冲）封顶，Permit2 约 1 小时有效`
-            : '本次无需 KNTQ 授权',
+            ? `Quyền KNTQ bị trần theo mức tối đa lần này ${formatUnits(amount1Max, 18)} (+0,1%), Permit2 khoảng 1 giờ`
+            : 'Lần này không cần cấp quyền KNTQ',
         ],
         unlockData,
         value,
@@ -177,21 +177,21 @@ export function AddLiquidityForm({
       amount1Max,
       recipient: address,
     })
-    const presetLabel = activePreset?.label ?? '自定义'
+    const presetLabel = activePreset?.label ?? 'Tự chọn'
     await tx.buildModifyTx({
-      title: '组池 · Mint 新仓位',
+      title: 'Thêm thanh khoản · mở vị thế mới',
       summary: [
-        `预设 ${presetLabel} · 区间 [${tl}, ${tu}]`,
+        `Mẫu ${presetLabel} · khoảng [${tl}, ${tu}]`,
         rangeMeta
-          ? `价格 1 HYPE ≈ ${formatPrice(rangeMeta.priceLo)}–${formatPrice(rangeMeta.priceHi)} KNTQ`
+          ? `Giá 1 HYPE ≈ ${formatPrice(rangeMeta.priceLo)}–${formatPrice(rangeMeta.priceHi)} KNTQ`
           : '',
-        `流动性 ${previewCalc.liq.toString()}`,
-        `预计使用 ${formatUnits(previewCalc.used.amount0, 18)} HYPE + ${formatUnits(previewCalc.used.amount1, 18)} KNTQ`,
-        `上限（含滑点 ${slip}%） ${formatUnits(amount0Max, 18)} HYPE + ${formatUnits(amount1Max, 18)} KNTQ`,
-        `deadline ${deadlineMin} 分钟`,
+        `Thanh khoản ${previewCalc.liq.toString()}`,
+        `Dự kiến dùng ${formatUnits(previewCalc.used.amount0, 18)} HYPE + ${formatUnits(previewCalc.used.amount1, 18)} KNTQ`,
+        `Trần (gồm trượt giá ${slip}%) ${formatUnits(amount0Max, 18)} HYPE + ${formatUnits(amount1Max, 18)} KNTQ`,
+        `Hạn chót ${deadlineMin} phút`,
         amount1Max > 0n
-          ? `KNTQ 授权按本次上限封顶（+0.1% 缓冲），Permit2 约 1 小时有效`
-          : '本次无需 KNTQ 授权',
+          ? `Quyền KNTQ bị trần theo mức lần này (+0,1%), Permit2 khoảng 1 giờ`
+          : 'Lần này không cần cấp quyền KNTQ',
       ].filter(Boolean),
       unlockData,
       value,
@@ -202,12 +202,12 @@ export function AddLiquidityForm({
 
   return (
     <section className="panel panel-mint">
-      <h2>{increaseTokenId != null ? `加仓 #${increaseTokenId}` : '组池（添加流动性）'}</h2>
+      <h2>{increaseTokenId != null ? `Thêm vào #${increaseTokenId}` : 'Thêm thanh khoản'}</h2>
 
       {increaseTokenId == null && (
         <div className="preset-block">
-          <div className="label">价格区间预设</div>
-          <div className="preset-grid" role="group" aria-label="区间预设">
+          <div className="label">Chọn khoảng giá</div>
+          <div className="preset-grid" role="group" aria-label="Mẫu khoảng giá">
             {RANGE_PRESETS.map((p) => (
               <button
                 key={p.id}
@@ -216,7 +216,7 @@ export function AddLiquidityForm({
                 onClick={() => selectPreset(p.id)}
               >
                 {p.label}
-                {p.recommended ? <span className="preset-badge">推荐</span> : null}
+                {p.recommended ? <span className="preset-badge">Gợi ý</span> : null}
               </button>
             ))}
           </div>
@@ -230,22 +230,22 @@ export function AddLiquidityForm({
                 </span>
               </div>
               <div className="range-row">
-                <span className="label">价格</span>
+                <span className="label">Giá</span>
                 <span>
                   1 HYPE ≈ {formatPrice(rangeMeta.priceLo)} – {formatPrice(rangeMeta.priceHi)} KNTQ
                 </span>
               </div>
               <div className="range-row">
-                <span className="label">相对现价</span>
+                <span className="label">So với giá hiện tại</span>
                 <span>
-                  ≈ ±{rangeMeta.width.toFixed(1)}%
-                  {rangeMeta.mult != null ? ` · 相对全区间约 ${rangeMeta.mult.toFixed(0)}× 流动性密度` : ''}
+                  khoảng ±{rangeMeta.width.toFixed(1)}%
+                  {rangeMeta.mult != null ? ` · dày hơn full range khoảng ${rangeMeta.mult.toFixed(0)} lần` : ''}
                 </span>
               </div>
               <div className="range-row">
-                <span className="label">状态</span>
+                <span className="label">Trạng thái</span>
                 <span className={rangeMeta.inRange ? 'ok-text' : 'warn-text'}>
-                  {rangeMeta.inRange ? '现价在区间内' : '现价已出区间（不会吃到手续费）'}
+                  {rangeMeta.inRange ? 'Giá đang trong khoảng' : 'Giá đã ra khỏi khoảng (không nhận phí)'}
                 </span>
               </div>
               {activePreset && <p className="risk-hint">{activePreset.riskHint}</p>}
@@ -262,11 +262,11 @@ export function AddLiquidityForm({
           {presetId === 'custom' && (
             <div className="row gap wrap custom-ticks">
               <label>
-                tickLower
+                Tick dưới
                 <input value={tickLower} onChange={(e) => setTickLower(e.target.value)} />
               </label>
               <label>
-                tickUpper
+                Tick trên
                 <input value={tickUpper} onChange={(e) => setTickUpper(e.target.value)} />
               </label>
             </div>
@@ -276,34 +276,34 @@ export function AddLiquidityForm({
 
       <div className="grid2">
         <label>
-          HYPE 预算
+          Số HYPE muốn bỏ
           <input value={amt0} onChange={(e) => setAmt0(e.target.value)} placeholder="0.0" />
-          <span className="muted small">余额 {formatUnits(hypeBal, 18, 4)}</span>
+          <span className="muted small">Số dư {formatUnits(hypeBal, 18, 4)}</span>
         </label>
         <label>
-          KNTQ 预算
+          Số KNTQ muốn bỏ
           <input value={amt1} onChange={(e) => setAmt1(e.target.value)} placeholder="0.0" />
-          <span className="muted small">余额 {formatUnits(kntqBal, 18, 4)}</span>
+          <span className="muted small">Số dư {formatUnits(kntqBal, 18, 4)}</span>
         </label>
       </div>
       <button type="button" className="btn ghost" onClick={fillFromBalance}>
-        用余额填入（留约 0.08 HYPE 作 gas）
+        Điền theo số dư (chừa khoảng 0,08 HYPE trả gas)
       </button>
 
       <div className="grid2">
         <label>
-          滑点 %（仅用户设定）
+          Trượt giá % (chỉ số bạn điền)
           <input value={slippage} onChange={(e) => setSlippage(e.target.value)} />
         </label>
         <label>
-          Deadline（分钟）
+          Hạn chót (phút)
           <input value={deadlineMin} onChange={(e) => setDeadlineMin(e.target.value)} />
         </label>
       </div>
 
       {previewCalc && (
         <p className="muted">
-          预估流动性 {previewCalc.liq.toString()} · 使用约{' '}
+          Thanh khoản ước tính {previewCalc.liq.toString()} · dùng khoảng{' '}
           {formatUnits(previewCalc.used.amount0, 18)} HYPE +{' '}
           {formatUnits(previewCalc.used.amount1, 18)} KNTQ
         </p>
@@ -315,7 +315,7 @@ export function AddLiquidityForm({
         disabled={!previewCalc || !address || !ticksValid || !!sendBlockReason}
         onClick={() => void onSubmit()}
       >
-        预览并确认建仓
+        Xem trước rồi xác nhận
       </button>
     </section>
   )

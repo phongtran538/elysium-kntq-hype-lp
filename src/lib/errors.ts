@@ -2,17 +2,17 @@ export function toChineseError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err)
   const lower = msg.toLowerCase()
   if (lower.includes('user rejected') || lower.includes('denied') || lower.includes('rejected the request')) {
-    return '用户取消了钱包签名'
+    return 'Bạn đã hủy ký trên ví'
   }
-  if (lower.includes('insufficient funds')) return '余额不足（含 Gas）'
+  if (lower.includes('insufficient funds')) return 'Không đủ số dư (kể cả phí gas)'
   if (lower.includes('rpc') || lower.includes('fetch') || lower.includes('network') || lower.includes('timeout')) {
-    return `RPC 请求失败：${msg}`
+    return `RPC lỗi: ${msg}`
   }
   if (lower.includes('execution reverted') || lower.includes('revert')) {
-    return `链上模拟/执行回退：${msg}`
+    return `Chain từ chối giao dịch: ${msg}`
   }
   if (lower.includes('slippage') || lower.includes('minmax')) {
-    return `滑点或数量保护触发：${msg}`
+    return `Trượt giá hoặc giới hạn số lượng đã chặn giao dịch: ${msg}`
   }
   return msg
 }

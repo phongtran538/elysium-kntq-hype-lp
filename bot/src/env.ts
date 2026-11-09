@@ -79,6 +79,17 @@ function parseRpcUrls(): readonly string[] {
   return urls
 }
 
+export function readKeyFromFile(file = path.resolve(process.cwd(), '.env')): `0x${string}` | null {
+  if (!fs.existsSync(file)) return null
+  const text = fs.readFileSync(file, 'utf8')
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (!trimmed.startsWith('PRIVATE_KEY=')) continue
+    return parseKey(trimmed.slice('PRIVATE_KEY='.length))
+  }
+  return null
+}
+
 export function loadConfig(): BotConfig {
   loadDotEnv()
   const maxGasNum = requiredNumber('MAX_GAS', 1_500_000, 21_000, 30_000_000)

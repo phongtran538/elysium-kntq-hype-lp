@@ -26,21 +26,21 @@ export function PositionCard({
       <div className="card-head">
         <strong>#{pos.tokenId.toString()}</strong>
         <div className="tag-row">
-          {full && <span className="tag warn">全区间·吃费稀</span>}
+          {full && <span className="tag warn">Cả dải · ăn phí ít</span>}
           <span className={`tag ${pos.inRange ? 'ok' : 'off'}`}>
-            {pos.inRange ? '范围内' : '出范围'}
+            {pos.inRange ? 'Trong khoảng' : 'Ngoài khoảng'}
           </span>
         </div>
       </div>
       <p className="muted mono small">
-        tick [{pos.tickLower}, {pos.tickUpper}]
+        Tick [{pos.tickLower}, {pos.tickUpper}]
       </p>
       <p className="price-sub">
         1 HYPE ≈ {formatPrice(priceLo)} – {formatPrice(priceHi)} KNTQ
       </p>
       <div className="tri">
         <div>
-          <div className="label">本金</div>
+          <div className="label">Vốn</div>
           <div className="val">
             {formatUnits(pos.amount0, 18, 4)} HYPE
             <br />
@@ -49,11 +49,11 @@ export function PositionCard({
           <div className="sub">
             {pos.principalUsd != null
               ? `≈ $${pos.principalUsd.toFixed(2)}`
-              : 'USD 待报价'}
+              : 'Chưa có giá USD'}
           </div>
         </div>
         <div>
-          <div className="label">待领收益</div>
+          <div className="label">Phí chưa rút</div>
           <div className="val">
             {formatUnits(pos.fees0, 18, 6)} HYPE
             <br />
@@ -64,11 +64,11 @@ export function PositionCard({
           </div>
         </div>
         <div>
-          <div className="label">近期年化</div>
+          <div className="label">Lãi năm gần đây</div>
           <div className="val">
-            {pos.aprPct != null ? `${pos.aprPct.toFixed(1)}%` : '采样中…'}
+            {pos.aprPct != null ? `${pos.aprPct.toFixed(1)}%` : 'Đang lấy mẫu…'}
           </div>
-          <div className="sub">秒级估算 · 需连续刷新</div>
+          <div className="sub">Ước tính vài giây · cần làm mới liên tục</div>
         </div>
       </div>
       {pool && (
@@ -82,10 +82,10 @@ export function PositionCard({
       )}
       <div className="row gap">
         <button className="btn" disabled={sendBlocked} onClick={() => onCollect(pos)}>
-          提取手续费
+          Rút phí
         </button>
         <button className="btn danger" disabled={sendBlocked} onClick={() => onWithdraw(pos)}>
-          撤池
+          Rút pool
         </button>
       </div>
     </article>

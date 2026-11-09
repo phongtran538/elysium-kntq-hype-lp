@@ -48,7 +48,7 @@ async function readSlot0(url: string): Promise<{
   const tick = Number(slot0[1])
   const price = priceFromSqrtX96(sqrtPriceX96, 18, 18)
   if (!(price > 0)) {
-    throw new Error('slot0 价格为 0')
+    throw new Error('Giá slot0 bằng 0')
   }
   return { price, tick, sqrtPriceX96 }
 }
@@ -76,9 +76,9 @@ export async function crossCheckPoolPrice(
   let agreed = false
   let blockReason: string | null
   if (ok.length < 2) {
-    blockReason = `只读到 ${ok.length} 个 RPC 的 slot0，至少需要 2 个才能交叉核对，已暂停发交易。`
+    blockReason = `Chỉ đọc được ${ok.length} RPC. Cần ít nhất 2 RPC để đối chiếu giá, nên đã khóa gửi giao dịch.`
   } else if (deviationPct == null || deviationPct > MAX_PRICE_DEVIATION_PCT) {
-    blockReason = `多个 RPC 的现价相差 ${(deviationPct ?? 0).toFixed(2)}%，超过 ${MAX_PRICE_DEVIATION_PCT}%。已暂停发交易。`
+    blockReason = `Các RPC lệch giá ${(deviationPct ?? 0).toFixed(2)}%, quá ${MAX_PRICE_DEVIATION_PCT}%. Đã khóa gửi giao dịch.`
   } else {
     agreed = true
     blockReason = null

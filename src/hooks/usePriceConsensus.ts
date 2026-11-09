@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { crossCheckPoolPrice, type PriceConsensus } from '../lib/priceCheck'
 
-const LOADING = '正在用多个 RPC 交叉核对现价…'
+const LOADING = 'Đang đối chiếu giá từ nhiều RPC…'
 
 export function usePriceConsensus(pollMs = 15_000) {
   const [result, setResult] = useState<PriceConsensus | null>(null)

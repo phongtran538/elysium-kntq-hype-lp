@@ -12,9 +12,9 @@ function moveLabel(n: number): string {
 }
 
 function lossLabel(ilPct: number | null): string {
-  if (ilPct == null || !Number.isFinite(ilPct)) return '算不出'
-  if (ilPct >= -0.005) return '几乎为 0'
-  return `约 ${Math.abs(ilPct).toFixed(2)}%`
+  if (ilPct == null || !Number.isFinite(ilPct)) return 'không tính được'
+  if (ilPct >= -0.005) return 'gần như 0'
+  return `khoảng ${Math.abs(ilPct).toFixed(2)}%`
 }
 
 export function RangeRiskNotice({
@@ -46,39 +46,43 @@ export function RangeRiskNotice({
     <div className="risk-stack">
       {status.level === 'out' && (
         <div className="risk-box out">
-          <strong>出区间警告</strong>
+          <strong>Cảnh báo: giá đã ra khỏi khoảng</strong>
           <p>
             {status.side === 'below'
-              ? '现价已经低于区间下沿，这个仓位现在收不到手续费，而且几乎只剩 HYPE。'
-              : '现价已经高于区间上沿，这个仓位现在收不到手续费，而且几乎只剩 KNTQ。'}
-            价格回到区间里才会重新两边挂单。
+              ? 'Giá đang thấp hơn mép dưới. Vị thế này không nhận phí, và gần như chỉ còn HYPE.'
+              : 'Giá đang cao hơn mép trên. Vị thế này không nhận phí, và gần như chỉ còn KNTQ.'}{' '}
+            Khi giá quay lại trong khoảng thì mới treo hai bên trở lại.
           </p>
         </div>
       )}
       {status.level === 'near' && (
         <div className="risk-box near">
-          <strong>快出区间了</strong>
+          <strong>Sắp ra khỏi khoảng</strong>
           <p>
-            现价还在区间里，但离
-            {status.nearest === 'lower' ? '下沿' : '上沿'}
-            只剩约 {Math.abs(status.nearest === 'lower' ? status.distanceLowerPct : status.distanceUpperPct).toFixed(2)}
-            %（警戒线是 5%）。再走一点就出区间，手续费会停。
+            Giá vẫn trong khoảng, nhưng cách mép{' '}
+            {status.nearest === 'lower' ? 'dưới' : 'trên'} chỉ còn khoảng{' '}
+            {Math.abs(status.nearest === 'lower' ? status.distanceLowerPct : status.distanceUpperPct).toFixed(2)}
+            % (mức cảnh báo là 5%). Nhích thêm một chút là hết phí.
             {status.distanceLowerPct <= 5 && status.distanceUpperPct <= 5
-              ? ` 下沿 ${status.distanceLowerPct.toFixed(2)}%，上沿 ${status.distanceUpperPct.toFixed(2)}%，两边都在警戒内。`
+              ? ` Mép dưới còn ${status.distanceLowerPct.toFixed(2)}%, mép trên còn ${status.distanceUpperPct.toFixed(2)}%. Cả hai đều trong vùng cảnh báo.`
               : ''}
           </p>
         </div>
       )}
       <div className="risk-box il">
-        <strong>无常损失（用大白话）</strong>
+        <strong>Tổn thất tạm thời (nói dễ hiểu)</strong>
         <p>
-          两种币放进池子后，涨的那边会被换成跌的那边。所以价格一变，仓位会比「当初那两笔币一直放钱包里」少一点。区间越窄，少得越快；真出了区间，这笔差额先被锁住，要等价格回来，或者你自己把仓位移回去。下面是从<strong>现在的价格</strong>再动 ±10% / ±20% / ±50% 的估算，<strong>没算手续费收入</strong>（手续费有时能补上一部分）。
+          Bỏ hai đồng vào pool thì đồng nào tăng sẽ bị đổi bớt sang đồng giảm. Nên khi giá đổi, vị thế
+          thường ít hơn so với cứ cầm hai đồng trong ví. Khoảng càng hẹp thì lệch càng nhanh. Ra hẳn khỏi
+          khoảng thì phần lệch này bị khóa, phải đợi giá quay lại hoặc tự chuyển vị thế. Bảng dưới là ước
+          tính nếu giá từ <strong>mức hiện tại</strong> chạy ±10% / ±20% / ±50%. <strong>Chưa tính phí</strong> bạn
+          nhận được (phí đôi khi bù lại một phần).
         </p>
         <table className="il-table">
           <thead>
             <tr>
-              <th>价格变动</th>
-              <th>大约少这么多</th>
+              <th>Giá chạy</th>
+              <th>Khoảng ít đi</th>
             </tr>
           </thead>
           <tbody>

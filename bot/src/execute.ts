@@ -46,6 +46,7 @@ import {
 } from './plan'
 import { loadPositions, type BotPosition } from './positions'
 import { withBackoff } from './retry'
+import { addHistory } from './history'
 import { readState, writeState } from './state'
 
 const DEADLINE_SECONDS = 10 * 60
@@ -171,17 +172,16 @@ async function guardBalance(
   }
 }
 
-export async function runLoop(cfg: BotConfig, shouldStop: () => boolean): Promise<void> {
+export async function runLoop(cfg: BotConfig, shouldStop: () => boolean): Promise<boolean> {
   if (!cfg.privateKey) {
     log('Thiếu PRIVATE_KEY trong file .env. Tạo một ví MỚI, chỉ bỏ ít tiền vào, rồi dán khoá vào .env trên máy bạn. Đừng gửi khoá cho bất kỳ ai.')
-    process.exitCode = 1
-    return
+    return false
   }
   const account = accountFrom(cfg.privateKey)
   if (cfg.dryRun) {
     log('DRY_RUN=true — bot CHỈ in kế hoạch ra màn hình và file logs/bot.log. Không gửi giao dịch.')
   } else {
-    log('DRY_RUN=false — bot SẼ gửi giao dịch thật từ ví riêng này. Bấm Ctrl+C để dừng.')
+    log('DRY_RUN=false — bot SẼ gửi giao dịch thật từ ví riêng này. Bấm Dừng trên trang hoặc Ctrl+C.')
   }
   log(`Ví bot: ${account.address}`)
   log(
@@ -209,6 +209,7 @@ export async function runLoop(cfg: BotConfig, shouldStop: () => boolean): Promis
     }
   }
   log('Bot đã dừng. Không gửi thêm giao dịch.')
+  return true
 }
 
 async function cycle(cfg: BotConfig, account: ReturnType<typeof accountFrom>): Promise<void> {
@@ -292,6 +293,11 @@ async function cycle(cfg: BotConfig, account: ReturnType<typeof accountFrom>): P
   if (cfg.dryRun) {
     await describePlan(cfg, publicClient, account.address, ready.p, consensus)
     log('DRY_RUN kết thúc vòng này. Không có giao dịch nào được gửi.')
+    addHistory({
+      at: Date.now(),
+      kind: 'dry-run',
+      summary: `Chỉ in kế hoạch cho vị thế #${ready.p.tokenId}. Không gửi giao dịch.`,
+    })
     return
   }
 
@@ -299,6 +305,11 @@ async function cycle(cfg: BotConfig, account: ReturnType<typeof accountFrom>): P
   await closeOne(cfg, publicClient, walletClient, account, ready.p, consensus.medianSqrtPriceX96)
   await swapAndMint(cfg, account)
   writeState({ lastRebalanceAt: Date.now(), pendingTokenId: null })
+  addHistory({
+    at: Date.now(),
+    kind: 'live',
+    summary: `Đã cân bằng lại vị thế #${ready.p.tokenId}.`,
+  })
   log('Cân bằng lại xong.')
 }
 

@@ -20,6 +20,9 @@ dist-ssr
 # Bot runtime (positions / cooldown). Never commit.
 bot/state.json
 bot/state.json.tmp
+bot/.auth-token
+bot/history.json
+bot/*.pid
 
 # Editor directories and files
 .vscode/*

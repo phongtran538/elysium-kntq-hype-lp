@@ -28,23 +28,23 @@ export function TxPreviewModal({
     : { name: 'PositionManager.modifyLiquidities', address: preview.to, value: preview.value }
 
   const confirmLabel = simulating
-    ? '模拟中…'
+    ? 'Đang thử…'
     : sending
-      ? '等待钱包…'
+      ? 'Đợi ví…'
       : isApproval
-        ? `模拟并签名 · 步骤 ${stepNum}/${totalSteps}（授权）`
-        : `模拟并签名 · 步骤 ${stepNum}/${totalSteps}（主交易）`
+        ? `Thử và ký · bước ${stepNum}/${totalSteps} (cấp quyền)`
+        : `Thử và ký · bước ${stepNum}/${totalSteps} (giao dịch chính)`
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
       <div className="modal">
         <h2>{preview.title}</h2>
         <p className="muted small">
-          签名前核对下面三个合约地址。钱包弹窗里的地址必须一模一样。每一步单独模拟、单独签名。
+          Trước khi ký, đối chiếu 3 địa chỉ dưới đây. Địa chỉ trong ví phải giống hệt. Mỗi bước thử riêng và ký riêng.
         </p>
 
         <div className="addr-block">
-          <div className="label">这次实际发给</div>
+          <div className="label">Lần này gửi tới</div>
           <div className="addr-called">{called.name}</div>
           <a
             className="mono small"
@@ -55,11 +55,11 @@ export function TxPreviewModal({
             {called.address}
           </a>
           <div className="small">
-            msg.value：{formatUnits(called.value, 18)} HYPE
+            Tiền gửi kèm (msg.value): {formatUnits(called.value, 18)} HYPE
           </div>
         </div>
 
-        <div className="label">合约地址（点开浏览器核对）</div>
+        <div className="label">Địa chỉ hợp đồng (bấm để mở explorer)</div>
         <ul className="addr-list">
           {preview.contracts.map((c) => (
             <li key={c.name}>
@@ -80,7 +80,7 @@ export function TxPreviewModal({
           ))}
           {approvals.length > 0 && (
             <li>
-              共 {totalSteps} 步（{approvals.length} 笔授权 + 1 笔主交易），当前第 {stepNum} 步
+              Tổng {totalSteps} bước ({approvals.length} lần cấp quyền + 1 giao dịch chính), đang ở bước {stepNum}
             </li>
           )}
           {currentApproval?.detail?.map((d) => (
@@ -89,13 +89,13 @@ export function TxPreviewModal({
             </li>
           ))}
           <li className="muted">
-            点确认后会再向多个 RPC 读一次 slot0。价差超过 1% 就取消，不会发交易。失败也不会自动重发或放宽滑点。
+            Bấm xác nhận sẽ đọc lại slot0 trên nhiều RPC. Lệch quá 1% thì hủy, không gửi. Lỗi cũng không tự gửi lại hay nới trượt giá.
           </li>
         </ul>
         {error && <p className="err">{error}</p>}
         <div className="row gap">
           <button className="btn" disabled={busy} onClick={onCancel}>
-            取消
+            Hủy
           </button>
           <button className="btn primary" disabled={busy} onClick={onConfirm}>
             {confirmLabel}

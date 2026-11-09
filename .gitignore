@@ -17,6 +17,10 @@ dist-ssr
 .env.*
 !.env.example
 
+# Bot runtime (positions / cooldown). Never commit.
+bot/state.json
+bot/state.json.tmp
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

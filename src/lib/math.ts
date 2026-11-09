@@ -181,6 +181,145 @@ export function parseUnits(value: string, decimals: number): bigint {
   return BigInt(w || '0') * 10n ** BigInt(decimals) + BigInt(frac || '0')
 }
 
+/** (max-min)/min in percent. Ignores non-positive samples. Null when fewer than 2 prices. */
+export function priceSpreadPct(prices: number[]): number | null {
+  const xs = prices.filter((p) => Number.isFinite(p) && p > 0)
+  if (xs.length < 2) return null
+  let min = xs[0]!
+  let max = xs[0]!
+  for (const p of xs) {
+    if (p < min) min = p
+    if (p > max) max = p
+  }
+  return ((max - min) / min) * 100
+}
+
+export type RangeEdgeStatus =
+  | { level: 'unknown'; distanceLowerPct: number; distanceUpperPct: number }
+  | { level: 'inside'; distanceLowerPct: number; distanceUpperPct: number }
+  | {
+      level: 'near'
+      distanceLowerPct: number
+      distanceUpperPct: number
+      nearest: 'lower' | 'upper'
+    }
+  | {
+      level: 'out'
+      side: 'below' | 'above'
+      distanceLowerPct: number
+      distanceUpperPct: number
+    }
+
+/**
+ * How close `spot` is to a position's price edges.
+ * Out below: spot < lower. Out above: spot >= upper (Uniswap's tick < tickUpper rule).
+ * Near: still inside, but either edge is within `nearPct` percent of spot.
+ */
+export function rangeEdgeStatus(
+  spot: number,
+  lower: number,
+  upper: number,
+  nearPct = 5,
+): RangeEdgeStatus {
+  if (!(spot > 0) || !(lower > 0) || !(upper > lower) || !Number.isFinite(nearPct)) {
+    return { level: 'unknown', distanceLowerPct: Number.NaN, distanceUpperPct: Number.NaN }
+  }
+  const distanceLowerPct = ((spot - lower) / spot) * 100
+  const distanceUpperPct = ((upper - spot) / spot) * 100
+  if (distanceLowerPct < 0) {
+    return { level: 'out', side: 'below', distanceLowerPct, distanceUpperPct }
+  }
+  if (distanceUpperPct <= 0) {
+    return { level: 'out', side: 'above', distanceLowerPct, distanceUpperPct }
+  }
+  const nearLower = distanceLowerPct <= nearPct
+  const nearUpper = distanceUpperPct <= nearPct
+  if (nearLower || nearUpper) {
+    return {
+      level: 'near',
+      distanceLowerPct,
+      distanceUpperPct,
+      nearest: distanceLowerPct <= distanceUpperPct ? 'lower' : 'upper',
+    }
+  }
+  return { level: 'inside', distanceLowerPct, distanceUpperPct }
+}
+
+/** Constant-product IL for a full-range 50/50 position, in percent (negative = loss). */
+export function fullRangeIlPct(priceMultiplier: number): number | null {
+  if (!(priceMultiplier > 0) || !Number.isFinite(priceMultiplier)) return null
+  const sqrtK = Math.sqrt(priceMultiplier)
+  return ((2 * sqrtK) / (1 + priceMultiplier) - 1) * 100
+}
+
+function scaleSqrtPrice(sqrtPriceX96: bigint, priceMultiplier: number): bigint {
+  const sqrtM = Math.sqrt(priceMultiplier)
+  if (!Number.isFinite(sqrtM) || sqrtM <= 0) return 0n
+  const scale = 1_000_000_000n
+  const num = BigInt(Math.round(sqrtM * 1_000_000_000))
+  if (num <= 0n) return 0n
+  return (sqrtPriceX96 * num) / scale
+}
+
+/**
+ * IL vs holding the position's current tokens, if price is multiplied by `priceMultiplier`.
+ * Percent, negative means the LP is worth less than holding. Independent of fee income.
+ */
+export function impermanentLossPct(args: {
+  sqrtPriceX96: bigint
+  sqrtLowerX96: bigint
+  sqrtUpperX96: bigint
+  liquidity: bigint
+  priceMultiplier: number
+}): number | null {
+  if (args.liquidity <= 0n) return null
+  if (!(args.priceMultiplier > 0) || !Number.isFinite(args.priceMultiplier)) return null
+  if (args.sqrtPriceX96 <= 0n) return null
+  const sqrtNext = scaleSqrtPrice(args.sqrtPriceX96, args.priceMultiplier)
+  if (sqrtNext <= 0n) return null
+  const now = getAmountsForLiquidity(
+    args.sqrtPriceX96,
+    args.sqrtLowerX96,
+    args.sqrtUpperX96,
+    args.liquidity,
+  )
+  const next = getAmountsForLiquidity(
+    sqrtNext,
+    args.sqrtLowerX96,
+    args.sqrtUpperX96,
+    args.liquidity,
+  )
+  const priceNow = priceFromSqrtX96(args.sqrtPriceX96)
+  const priceNext = priceNow * args.priceMultiplier
+  if (!(priceNext > 0)) return null
+  const valueLp = Number(next.amount1) + Number(next.amount0) * priceNext
+  const valueHold = Number(now.amount1) + Number(now.amount0) * priceNext
+  if (!(valueHold > 0) || !Number.isFinite(valueLp) || !Number.isFinite(valueHold)) return null
+  return ((valueLp - valueHold) / valueHold) * 100
+}
+
+export const IL_MOVES = [10, -10, 20, -20, 50, -50] as const
+
+export function impermanentLossRows(args: {
+  sqrtPriceX96: bigint
+  sqrtLowerX96: bigint
+  sqrtUpperX96: bigint
+  liquidity: bigint
+  moves?: readonly number[]
+}): { movePct: number; ilPct: number | null }[] {
+  const moves = args.moves ?? IL_MOVES
+  return moves.map((movePct) => ({
+    movePct,
+    ilPct: impermanentLossPct({
+      sqrtPriceX96: args.sqrtPriceX96,
+      sqrtLowerX96: args.sqrtLowerX96,
+      sqrtUpperX96: args.sqrtUpperX96,
+      liquidity: args.liquidity,
+      priceMultiplier: 1 + movePct / 100,
+    }),
+  }))
+}
+
 export function decodePositionInfo(info: bigint): {
   tickLower: number
   tickUpper: number

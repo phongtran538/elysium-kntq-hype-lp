@@ -5,7 +5,9 @@ import { StaleBanner } from './components/StaleBanner'
 import { AddLiquidityForm } from './components/AddLiquidityForm'
 import { PositionGrid } from './components/PositionGrid'
 import { TxPreviewModal } from './components/TxPreviewModal'
+import { PriceCheckBanner } from './components/PriceCheckBanner'
 import { usePoolState } from './hooks/usePoolState'
+import { usePriceConsensus } from './hooks/usePriceConsensus'
 import { useBalances } from './hooks/useBalances'
 import { usePositions, type LpPosition } from './hooks/usePositions'
 import { useTxFlow } from './hooks/useTxFlow'
@@ -24,12 +26,14 @@ import {
   DEFAULT_SLIPPAGE_PCT,
   POOL_KEY,
   POSITION_MANAGER,
+  explorerTx,
 } from './config/contracts'
 import './App.css'
 
 export default function App() {
   const { address, isConnected } = useAccount()
   const { state: pool, error: poolErr, refresh: refreshPool } = usePoolState()
+  const { result: priceCheck, blockReason: sendBlockReason, refresh: refreshPrice } = usePriceConsensus()
   const { hype, kntq, refresh: refreshBal } = useBalances()
   // Optional: user can paste HYPE/USD; never fabricate
   const [hypeUsd, setHypeUsd] = useState('')
@@ -101,6 +105,10 @@ export default function App() {
   }
 
   async function onManualWithdraw() {
+    if (sendBlockReason) {
+      alert(sendBlockReason)
+      return
+    }
     const id = BigInt(manualTokenId.trim() || '0')
     if (id <= 0n) {
       alert('请填写有效 tokenId')
@@ -112,6 +120,10 @@ export default function App() {
 
   async function onCollect(p: LpPosition) {
     if (!address || !pool) return
+    if (sendBlockReason) {
+      alert(sendBlockReason)
+      return
+    }
     if (pool.stale) {
       alert('行情已过期，请先刷新')
       return
@@ -139,11 +151,18 @@ export default function App() {
       unlockData,
       value,
       deadline,
+      hypeDetail: `最少领取 ${formatUnits(amount0Min, 18, 6)} HYPE。不发送原生币（msg.value = 0）。`,
+      kntqDetail: `最少领取 ${formatUnits(amount1Min, 18, 6)} KNTQ。这次不从钱包转出余额。`,
+      permitDetail: '这次不调用 Permit2，也不授权 KNTQ。',
     })
   }
 
   async function onWithdraw(p: LpPosition) {
     if (!address || !pool) return
+    if (sendBlockReason) {
+      alert(sendBlockReason)
+      return
+    }
     if (pool.stale) {
       alert('行情已过期，请先刷新')
       return
@@ -179,6 +198,9 @@ export default function App() {
       unlockData,
       value,
       deadline,
+      hypeDetail: `最少收回 ${formatUnits(amount0Min, 18)} HYPE。不发送原生币（msg.value = 0）。`,
+      kntqDetail: `最少收回 ${formatUnits(amount1Min, 18)} KNTQ。这次不从钱包转出余额。`,
+      permitDetail: '这次不调用 Permit2，也不授权 KNTQ。',
     })
   }
 
@@ -186,12 +208,14 @@ export default function App() {
     void refreshPool()
     void refreshBal()
     void refreshPos()
+    void refreshPrice()
   }
 
   return (
     <div className="app">
       <ConnectBar />
       <StaleBanner stale={!!pool?.stale} rpcError={poolErr} onRefresh={refreshAll} />
+      <PriceCheckBanner result={priceCheck} />
 
       <section className="panel meta">
         <div>
@@ -247,14 +271,22 @@ export default function App() {
       {isConnected ? (
         <div className="layout-main">
           <div className="col-mint">
-            <AddLiquidityForm pool={pool} hypeBal={hype} kntqBal={kntq} tx={tx} />
+            <AddLiquidityForm
+              pool={pool}
+              hypeBal={hype}
+              kntqBal={kntq}
+              tx={tx}
+              sendBlockReason={sendBlockReason}
+            />
           </div>
           <div className="col-positions">
             <PositionGrid
               positions={positions}
+              pool={pool}
               loading={loading}
               error={posError}
               manualTokenId={manualTokenId}
+              sendBlockReason={sendBlockReason}
               onManualTokenIdChange={setManualTokenId}
               onManualWithdraw={() => void onManualWithdraw()}
               onRefresh={() => void refreshPos()}
@@ -284,7 +316,7 @@ export default function App() {
       {tx.lastTx && (
         <p className="panel muted mono">
           最近交易：{' '}
-          <a href={`https://elyscan.fun/tx/${tx.lastTx}`} target="_blank" rel="noreferrer">
+          <a href={explorerTx(tx.lastTx)} target="_blank" rel="noreferrer">
             {tx.lastTx}
           </a>
         </p>

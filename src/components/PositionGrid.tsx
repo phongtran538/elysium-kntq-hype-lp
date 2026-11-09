@@ -1,14 +1,17 @@
 import { useMemo, useState } from 'react'
 import type { LpPosition } from '../hooks/usePositions'
+import type { PoolState } from '../hooks/usePoolState'
 import { PositionCard } from './PositionCard'
 
 type SortKey = 'principal' | 'fees' | 'apr' | 'id'
 
 export function PositionGrid({
   positions,
+  pool,
   loading,
   error,
   manualTokenId,
+  sendBlockReason,
   onManualTokenIdChange,
   onManualWithdraw,
   onRefresh,
@@ -16,9 +19,11 @@ export function PositionGrid({
   onWithdraw,
 }: {
   positions: LpPosition[]
+  pool: PoolState | null
   loading: boolean
   error?: string | null
   manualTokenId: string
+  sendBlockReason: string | null
   onManualTokenIdChange: (v: string) => void
   onManualWithdraw: () => void
   onRefresh: () => void
@@ -67,7 +72,12 @@ export function PositionGrid({
               placeholder="例如 827"
             />
           </label>
-          <button className="btn danger" type="button" onClick={onManualWithdraw}>
+          <button
+            className="btn danger"
+            type="button"
+            disabled={!!sendBlockReason}
+            onClick={onManualWithdraw}
+          >
             预览撤池 #{manualTokenId || '…'}
           </button>
           <button className="btn" type="button" onClick={onRefresh}>
@@ -76,6 +86,7 @@ export function PositionGrid({
         </div>
       </div>
 
+      {sendBlockReason && <p className="err">{sendBlockReason}</p>}
       {loading && <p className="muted">读取链上仓位…</p>}
       {error && <p className="err">持仓读取失败：{error}</p>}
       {!loading && !error && sorted.length === 0 && (
@@ -85,7 +96,14 @@ export function PositionGrid({
       )}
       <div className="cards">
         {sorted.map((p) => (
-          <PositionCard key={p.tokenId.toString()} pos={p} onCollect={onCollect} onWithdraw={onWithdraw} />
+          <PositionCard
+            key={p.tokenId.toString()}
+            pos={p}
+            pool={pool}
+            sendBlocked={!!sendBlockReason}
+            onCollect={onCollect}
+            onWithdraw={onWithdraw}
+          />
         ))}
       </div>
     </section>

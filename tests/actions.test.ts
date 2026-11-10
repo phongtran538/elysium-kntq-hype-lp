@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { NATIVE, UNIVERSAL_ROUTER } from '../src/config/contracts'
 import {
   encodeClosePosition,
+  encodeCollectFees,
   encodeIncreaseLiquidity,
   encodeMintPosition,
   encodeV4ExactInputSingle,
@@ -22,7 +23,41 @@ function sweepCurrency(unlockData: `0x${string}`): string {
   return currency.toLowerCase()
 }
 
+function decreaseParams(unlockData: `0x${string}`) {
+  const [actions, params] = decodeAbiParameters(
+    [{ type: 'bytes' }, { type: 'bytes[]' }],
+    unlockData,
+  )
+  const [tokenId, liquidity, amount0Min, amount1Min] = decodeAbiParameters(
+    [
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint128' },
+      { type: 'uint128' },
+      { type: 'bytes' },
+    ],
+    params[0]!,
+  )
+  return { actions, tokenId, liquidity, amount0Min, amount1Min }
+}
+
 describe('action encoding', () => {
+  it('collects fees with a zero minimum so liquidity 0 does not revert', () => {
+    const recipient = '0x0000000000000000000000000000000000000001'
+    const { unlockData, value } = encodeCollectFees({ tokenId: 1844n, recipient })
+    expect(value).toBe(0n)
+    const decoded = decreaseParams(unlockData)
+    // DECREASE_LIQUIDITY, TAKE_PAIR
+    expect(decoded.actions).toBe('0x0111')
+    expect(decoded.tokenId).toBe(1844n)
+    expect(decoded.liquidity).toBe(0n)
+    // The failed collect used fee estimates as mins. The contract checks principal, which is 0.
+    expect(decoded.amount0Min).toBe(0n)
+    expect(decoded.amount1Min).toBe(0n)
+    expect(unlockData.includes('34ce586c061bb4')).toBe(false)
+    expect(unlockData.includes('28a102ad1501450e')).toBe(false)
+  })
+
   it('packs decrease, take, and burn for a full close', () => {
     const { unlockData, value } = encodeClosePosition({
       tokenId: 7n,
@@ -38,6 +73,20 @@ describe('action encoding', () => {
     )
     // DECREASE_LIQUIDITY, TAKE_PAIR, BURN_POSITION
     expect(actions).toBe('0x011103')
+    const decoded = decreaseParams(unlockData)
+    expect(decoded.liquidity).toBe(123n)
+    expect(decoded.amount0Min).toBe(5n)
+    expect(decoded.amount1Min).toBe(9n)
+    const [, params] = decodeAbiParameters(
+      [{ type: 'bytes' }, { type: 'bytes[]' }],
+      unlockData,
+    )
+    const [, burn0, burn1] = decodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'uint128' }, { type: 'uint128' }, { type: 'bytes' }],
+      params[2]!,
+    )
+    expect(burn0).toBe(0n)
+    expect(burn1).toBe(0n)
   })
 
   it('encodes a V4 exact-input swap with slippage and a deadline', () => {

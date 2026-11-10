@@ -66,4 +66,19 @@ export const positionManagerAbi = [
       { name: 'tokenId', type: 'uint256', indexed: true },
     ],
   },
+  { type: 'error', name: 'MaximumAmountExceeded', inputs: [
+    { name: 'maximumAmount', type: 'uint128' },
+    { name: 'amountRequested', type: 'uint128' },
+  ] },
+  { type: 'error', name: 'MinimumAmountInsufficient', inputs: [
+    { name: 'minimumAmount', type: 'uint128' },
+    { name: 'amountReceived', type: 'uint128' },
+  ] },
+  { type: 'error', name: 'DeadlinePassed', inputs: [{ name: 'deadline', type: 'uint256' }] },
+  { type: 'error', name: 'NotApproved', inputs: [{ name: 'caller', type: 'address' }] },
+  { type: 'error', name: 'UnsupportedAction', inputs: [{ name: 'action', type: 'uint256' }] },
+  { type: 'error', name: 'ContractLocked', inputs: [] },
+  { type: 'error', name: 'InputLengthMismatch', inputs: [] },
+  { type: 'error', name: 'DeltaNotPositive', inputs: [{ name: 'currency', type: 'address' }] },
+  { type: 'error', name: 'DeltaNotNegative', inputs: [{ name: 'currency', type: 'address' }] },
 ] as const

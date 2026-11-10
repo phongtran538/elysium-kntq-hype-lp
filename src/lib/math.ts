@@ -164,6 +164,32 @@ export function applySlippageMin(amount: bigint, slippagePct: number): bigint {
 }
 
 /**
+ * Mins for DECREASE_LIQUIDITY / BURN_POSITION.
+ * PositionManager checks these against principal only (liquidity removed),
+ * not against fees. Do not add fee estimates into these numbers.
+ */
+export function principalSlippageMins(args: {
+  sqrtPriceX96: bigint
+  tickLower: number
+  tickUpper: number
+  liquidity: bigint
+  slippagePct: number
+}): { amount0: bigint; amount1: bigint; amount0Min: bigint; amount1Min: bigint } {
+  const principal = getAmountsForLiquidity(
+    args.sqrtPriceX96,
+    getSqrtRatioAtTick(args.tickLower),
+    getSqrtRatioAtTick(args.tickUpper),
+    args.liquidity,
+  )
+  return {
+    amount0: principal.amount0,
+    amount1: principal.amount1,
+    amount0Min: applySlippageMin(principal.amount0, args.slippagePct),
+    amount1Min: applySlippageMin(principal.amount1, args.slippagePct),
+  }
+}
+
+/**
  * Size liquidity from a reduced budget so
  * used * (1 + slippage) stays within the available balance.
  * Do not size from the full balance and then set max = used * (1 + slippage),

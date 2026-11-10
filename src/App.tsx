@@ -16,12 +16,12 @@ import { usePositions, type LpPosition } from './hooks/usePositions'
 import type { PriceConsensus } from './lib/priceCheck'
 import { useTxFlow } from './hooks/useTxFlow'
 import {
-  applySlippageMin,
   decodePositionInfo,
   formatUnits,
   getAmountsForLiquidity,
   getSqrtRatioAtTick,
   parseUnits,
+  principalSlippageMins,
 } from './lib/math'
 import { encodeCollectFees, encodeDecreaseLiquidity } from './lib/actions'
 import { publicClient } from './lib/rpcClient'
@@ -234,27 +234,26 @@ export default function App() {
       alert('Điền trượt giá hợp lệ (app không tự nới)')
       return
     }
-    const amount0Min = applySlippageMin(p.fees0, slip)
-    const amount1Min = applySlippageMin(p.fees1, slip)
     const deadline = BigInt(Math.floor(Date.now() / 1000) + Number(deadlineMin) * 60)
+    // Liquidity removed is 0, so the contract's minimum check is against 0.
+    // A nonzero minimum reverts even when fees are owed. Simulation guards the call.
     const { unlockData, value } = encodeCollectFees({
       tokenId: p.tokenId,
       recipient: address,
-      amount0Min,
-      amount1Min,
     })
     await tx.buildModifyTx({
       title: `Rút phí #${p.tokenId}`,
       summary: [
         `Ước tính được nhận ${formatUnits(p.fees0, 18, 6)} HYPE + ${formatUnits(p.fees1, 18, 6)} KNTQ`,
-        `Nhận tối thiểu ${formatUnits(amount0Min, 18, 6)} HYPE + ${formatUnits(amount1Min, 18, 6)} KNTQ (trượt giá ${slip}%)`,
+        'Mức tối thiểu trên chain là 0. Hợp đồng chỉ so với phần gốc, mà lần này gốc bằng 0.',
+        'Ứng dụng chạy thử giao dịch trước khi mở ví.',
         'Việc làm: DECREASE_LIQUIDITY(0) + TAKE_PAIR',
       ],
       unlockData,
       value,
       deadline,
-      hypeDetail: `Nhận tối thiểu ${formatUnits(amount0Min, 18, 6)} HYPE. Không gửi HYPE native (msg.value = 0).`,
-      kntqDetail: `Nhận tối thiểu ${formatUnits(amount1Min, 18, 6)} KNTQ. Không chuyển số dư ra khỏi ví.`,
+      hypeDetail: 'Không đặt mức tối thiểu HYPE (bằng 0). Không gửi HYPE native (msg.value = 0).',
+      kntqDetail: 'Không đặt mức tối thiểu KNTQ (bằng 0). Không chuyển số dư ra khỏi ví.',
       permitDetail: 'Lần này không gọi Permit2 và không cấp quyền KNTQ.',
     })
   }
@@ -275,11 +274,15 @@ export default function App() {
     }
     const ok = confirm(`Rút hết thanh khoản vị thế #${p.tokenId} và nhận lại token?`)
     if (!ok) return
-    const sqrtA = getSqrtRatioAtTick(p.tickLower)
-    const sqrtB = getSqrtRatioAtTick(p.tickUpper)
-    const amounts = getAmountsForLiquidity(pool.sqrtPriceX96, sqrtA, sqrtB, p.liquidity)
-    const amount0Min = applySlippageMin(amounts.amount0, slip)
-    const amount1Min = applySlippageMin(amounts.amount1, slip)
+    const mins = principalSlippageMins({
+      sqrtPriceX96: pool.sqrtPriceX96,
+      tickLower: p.tickLower,
+      tickUpper: p.tickUpper,
+      liquidity: p.liquidity,
+      slippagePct: slip,
+    })
+    const amount0Min = mins.amount0Min
+    const amount1Min = mins.amount1Min
     const deadline = BigInt(Math.floor(Date.now() / 1000) + Number(deadlineMin) * 60)
     const { unlockData, value } = encodeDecreaseLiquidity({
       tokenId: p.tokenId,
@@ -293,7 +296,7 @@ export default function App() {
       title: `Rút pool và hủy NFT #${p.tokenId}`,
       summary: [
         `Thanh khoản ${p.liquidity.toString()}`,
-        `Nhận lại tối thiểu ${formatUnits(amount0Min, 18)} HYPE + ${formatUnits(amount1Min, 18)} KNTQ (trượt giá ${slip}%)`,
+        `Nhận lại tối thiểu phần gốc ${formatUnits(amount0Min, 18)} HYPE + ${formatUnits(amount1Min, 18)} KNTQ (trượt giá ${slip}%, không gồm phí)`,
         `Hạn chót ${deadlineMin} phút`,
         'Việc làm: BURN_POSITION + TAKE_PAIR',
       ],

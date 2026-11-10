@@ -1,4 +1,4 @@
-import { encodeAbiParameters, toFunctionSelector } from 'viem'
+import { encodeAbiParameters, toFunctionSelector, type Address } from 'viem'
 import { describe, expect, it } from 'vitest'
 import { decodeV4Error, toChineseError } from '../src/lib/errors'
 
@@ -37,7 +37,29 @@ describe('V4 revert text', () => {
       [10n ** 18n, 10n ** 17n],
     )
     expect(toChineseError({ data: low })).toContain('ít hơn mức tối thiểu')
+    expect(toChineseError({ data: low })).toContain('phần gốc')
     const late = revert('DeadlinePassed(uint256)', ['uint256'], [123n])
     expect(toChineseError(new Error(late))).toContain('Hết hạn')
+  })
+
+  it('turns PositionManager custom errors into Vietnamese instead of unknown reason', () => {
+    const caller = '0x00000000000000000000000000000000000000ab' as Address
+    const data = `${toFunctionSelector('NotApproved(address)')}${encodeAbiParameters([{ type: 'address' }], [caller]).slice(2)}`
+    const text = toChineseError({
+      message:
+        'The contract function "modifyLiquidities" reverted.\n\nReason: unknown reason\nContract: 0x1d1c51b9d07fd27d36412a2b66cc23d19eb3e518',
+      cause: { data, shortMessage: 'unknown reason' },
+    })
+    expect(text).toContain('không phải chủ NFT')
+    expect(text.toLowerCase()).toContain('0x00000000000000000000000000000000000000ab')
+    expect(text.toLowerCase()).not.toContain('unknown reason')
+    const locked = toFunctionSelector('ContractLocked()')
+    expect(
+      toChineseError({
+        message: 'Execution reverted with reason: unknown reason.',
+        cause: { data: locked },
+      }),
+    ).toContain('đang bận')
+    expect(toChineseError(new Error('execution reverted: unknown reason'))).toContain('Không đọc được lỗi')
   })
 })

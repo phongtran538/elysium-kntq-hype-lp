@@ -12,6 +12,7 @@ import {
   getLiquidityForAmounts,
   getSqrtRatioAtTick,
   liquidityUnderSlippageCap,
+  principalSlippageMins,
   impermanentLossPct,
   parseUnits,
   priceFromSqrtX96,
@@ -165,6 +166,22 @@ describe('fees, slippage, units, position info', () => {
     expect(applySlippageMin(1_000_000n, 0.5)).toBe(995_000n)
     expect(applySlippageMin(10n, 50)).toBe(5n)
     expect(applySlippageMin(1n, 100)).toBe(0n)
+  })
+
+  it('sets decrease mins from principal only, not principal plus fees', () => {
+    const sqrtP = getSqrtRatioAtTick(0)
+    const mins = principalSlippageMins({
+      sqrtPriceX96: sqrtP,
+      tickLower: -2_000,
+      tickUpper: 2_000,
+      liquidity: 10n ** 18n,
+      slippagePct: 0.5,
+    })
+    const fees0 = 10n ** 18n
+    expect(mins.amount0 > 0n).toBe(true)
+    expect(mins.amount0Min).toBe(applySlippageMin(mins.amount0, 0.5))
+    expect(mins.amount1Min).toBe(applySlippageMin(mins.amount1, 0.5))
+    expect(mins.amount0Min < applySlippageMin(mins.amount0 + fees0, 0.5)).toBe(true)
   })
 
   it('parses and formats token units', () => {

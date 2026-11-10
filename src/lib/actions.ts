@@ -169,12 +169,16 @@ export function encodeIncreaseLiquidity(args: {
   }
 }
 
-/** Collect fees only: decrease 0 liquidity + TAKE_PAIR */
+/**
+ * Collect fees only: DECREASE_LIQUIDITY with liquidity 0 + TAKE_PAIR.
+ * amount0Min and amount1Min stay 0. PositionManager compares the minimum to
+ * principal (liquidity removed minus nothing), so any nonzero minimum reverts
+ * with MinimumAmountInsufficient when no liquidity is removed. The app
+ * simulates the call before opening the wallet instead.
+ */
 export function encodeCollectFees(args: {
   tokenId: bigint
   recipient: Address
-  amount0Min?: bigint
-  amount1Min?: bigint
   hookData?: Hex
 }): { unlockData: Hex; value: bigint } {
   const hookData = args.hookData ?? '0x'
@@ -186,7 +190,7 @@ export function encodeCollectFees(args: {
       { type: 'uint128' },
       { type: 'bytes' },
     ],
-    [args.tokenId, 0n, args.amount0Min ?? 0n, args.amount1Min ?? 0n, hookData],
+    [args.tokenId, 0n, 0n, 0n, hookData],
   )
   const take = encodeAbiParameters(
     [{ type: 'address' }, { type: 'address' }, { type: 'address' }],
@@ -201,6 +205,10 @@ export function encodeCollectFees(args: {
   }
 }
 
+/**
+ * amount0Min/amount1Min are principal only (see principalSlippageMins).
+ * Fees are paid on top and are not part of this check.
+ */
 export function encodeDecreaseLiquidity(args: {
   tokenId: bigint
   liquidity: bigint
@@ -257,9 +265,10 @@ export function encodeDecreaseLiquidity(args: {
 }
 
 /**
- * Withdraw everything: decrease liquidity to 0 (principal + fees),
- * TAKE_PAIR to the recipient, then BURN_POSITION.
- * Burn sees zero liquidity and only destroys the NFT.
+ * Withdraw everything: decrease liquidity to 0, TAKE_PAIR, then BURN_POSITION.
+ * The decrease minimum is principal only. Burn then sees zero liquidity and
+ * uses a 0 minimum, which only destroys the NFT. Fees are taken with the
+ * principal but are not part of the minimum check.
  */
 export function encodeClosePosition(args: {
   tokenId: bigint
